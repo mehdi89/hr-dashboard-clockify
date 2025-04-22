@@ -2,7 +2,7 @@ import { Metadata } from "next";
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { BarChart, FileText, PieChart, TrendingUp } from "lucide-react";
+import { BarChart, FileText, PieChart, TrendingUp, Tag } from "lucide-react";
 
 export const metadata: Metadata = {
   title: "Reports - Time Tracking System",
@@ -17,8 +17,14 @@ export default async function ReportsPage() {
       href: "/reports/tasks",
     },
     {
+      title: "Tags Report",
+      description: "Analyze time spent on different tags and their distribution",
+      icon: <Tag className="h-8 w-8 text-primary" />,
+      href: "/reports/tags",
+    },
+    {
       title: "Efficiency Report",
-      description: "Analyze productivity metrics and billable hours ratio",
+      description: "Analyze productivity metrics and time distribution",
       icon: <TrendingUp className="h-8 w-8 text-primary" />,
       href: "/reports/efficiency",
     },

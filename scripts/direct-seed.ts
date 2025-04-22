@@ -1,15 +1,20 @@
-import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 import * as path from 'path';
 import { parse } from 'csv-parse/sync';
-import { employees, EmploymentType, timeEntries, importLogs, ImportStatus } from '../src/db/schema';
-import { format } from 'date-fns';
 
 // Load environment variables
 dotenv.config({ path: '.env.local' });
 dotenv.config({ path: '.env' });
+
+// Define employment types
+enum EmploymentType {
+  FULL_TIME = 'full-time',
+  PART_TIME = 'part-time',
+  CONTRACT = 'contract',
+  FREELANCE = 'freelance',
+}
 
 // Define departments
 const departments = [
@@ -58,15 +63,12 @@ async function seedDatabase() {
     connectionString: process.env.DATABASE_URL,
   });
 
-  // Create a Drizzle instance
-  const db = drizzle(pool);
-
   try {
     // Clear existing data
     console.log('Clearing existing data...');
-    await db.delete(timeEntries);
-    await db.delete(importLogs);
-    await db.delete(employees);
+    await pool.query('DELETE FROM time_entries');
+    await pool.query('DELETE FROM import_logs');
+    await pool.query('DELETE FROM employees');
     
     // Read the CSV file
     const csvFilePath = path.resolve(__dirname, '../Clockify_Time_Report_Detailed_14_04_2025-20_04_2025.csv');
@@ -106,19 +108,24 @@ async function seedDatabase() {
     const importStartDate = new Date('2025-04-14');
     const importEndDate = new Date('2025-04-20');
     
-    const [importLog] = await db.insert(importLogs).values({
-      startDate: importStartDate.toISOString().split('T')[0],
-      endDate: importEndDate.toISOString().split('T')[0],
-      importDate: new Date(),
-      status: ImportStatus.SUCCESS,
-      fileName: 'Clockify_Time_Report_Detailed_14_04_2025-20_04_2025.csv'
-    }).returning();
+    const importLogResult = await pool.query(`
+      INSERT INTO import_logs (start_date, end_date, import_date, status, file_name)
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING id
+    `, [
+      importStartDate.toISOString().split('T')[0],
+      importEndDate.toISOString().split('T')[0],
+      new Date(),
+      'SUCCESS',
+      'Clockify_Time_Report_Detailed_14_04_2025-20_04_2025.csv'
+    ]);
     
-    console.log(`Created import log with ID: ${importLog.id}`);
+    const importLogId = importLogResult.rows[0].id;
+    console.log(`Created import log with ID: ${importLogId}`);
     
     // Create employees
     console.log('Creating employees...');
-    const employeeRecords = [];
+    const employeeMap = new Map<string, number>();
     
     for (const [employeeName, projects] of Object.entries(employeeProjects)) {
       // Determine primary project and department
@@ -131,30 +138,31 @@ async function seedDatabase() {
       // Create random start date
       const randomStartDate = new Date(2024, Math.floor(Math.random() * 12), Math.floor(Math.random() * 28) + 1);
       
-      // Create employee record
-      const employee = {
-        name: employeeName,
-        email: employeeEmails[employeeName] || `${employeeName.toLowerCase().replace(/\s+/g, '.')}@example.com`,
+      // Insert employee
+      const employeeResult = await pool.query(`
+        INSERT INTO employees (name, email, department, employment_type, weekly_committed_hours, start_date, is_active, clockify_name)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        RETURNING id
+      `, [
+        employeeName,
+        employeeEmails[employeeName] || `${employeeName.toLowerCase().replace(/\s+/g, '.')}@example.com`,
         department,
         employmentType,
-        weeklyCommittedHours: committedHours[employmentType],
-        startDate: randomStartDate.toISOString().split('T')[0],
-        isActive: true,
-        clockifyName: employeeName
-      };
+        committedHours[employmentType],
+        randomStartDate.toISOString().split('T')[0],
+        true,
+        employeeName
+      ]);
       
-      employeeRecords.push(employee);
+      const employeeId = employeeResult.rows[0].id;
+      employeeMap.set(employeeName, employeeId);
     }
     
-    const createdEmployees = await db.insert(employees).values(employeeRecords).returning();
-    console.log(`Created ${createdEmployees.length} employees`);
-    
-    // Create a map of employee names to IDs
-    const employeeMap = new Map(createdEmployees.map(emp => [emp.clockifyName, emp.id]));
+    console.log(`Created ${employeeMap.size} employees`);
     
     // Create time entries
     console.log('Creating time entries...');
-    const timeEntryRecords = [];
+    let createdEntries = 0;
     
     for (const record of records) {
       const employeeName = record.User;
@@ -187,31 +195,43 @@ async function seedDatabase() {
         }
       }
 
-      // Create time entry with all required fields
-      timeEntryRecords.push({
-        employeeId,
-        date: startDate,
-        project: record.Project,
-        client: record.Client || '',
-        description: record.Description || '',
-        task: record.Task || '',
-        group: record.Group || '',
-        email: record.Email || '',
-        tags: record.Tags || '',
-        billable,
-        startDate,
-        startTime: record['Start Time'],
-        endDate,
-        endTime: record['End Time'],
-        hoursWorked: hoursWorked,
-        durationDecimal: record['Duration (decimal)'],
-        uniqueEntryId,
-        importBatchId: importLog.id
-      });
+      try {
+        // Insert time entry
+        await pool.query(`
+          INSERT INTO time_entries (
+            employee_id, date, project, client, description, task, "group", email, tags, billable,
+            start_date, start_time, end_date, end_time, hours_worked, duration_decimal, unique_entry_id, import_batch_id
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+        `, [
+          employeeId,
+          startDate,
+          record.Project,
+          record.Client || '',
+          record.Description || '',
+          record.Task || '',
+          record.Group || '',
+          record.Email || '',
+          record.Tags || '',
+          billable,
+          startDate,
+          record['Start Time'],
+          endDate,
+          record['End Time'],
+          hoursWorked,
+          record['Duration (decimal)'],
+          uniqueEntryId,
+          importLogId
+        ]);
+      } catch (error: any) {
+        console.warn(`Error inserting time entry for ${record.User} on ${startDate}: ${error.message || 'Unknown error'}`);
+        continue;
+      }
+      
+      createdEntries++;
     }
     
-    const createdTimeEntries = await db.insert(timeEntries).values(timeEntryRecords).returning();
-    console.log(`Created ${createdTimeEntries.length} time entries`);
+    console.log(`Created ${createdEntries} time entries`);
 
   } catch (error) {
     console.error('Seeding failed:', error);

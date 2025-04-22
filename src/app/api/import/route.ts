@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { importLogs, ImportStatus, timeEntries, employees } from '@/db/schema';
-import { desc, eq } from 'drizzle-orm';
+import { desc, eq, sql } from 'drizzle-orm';
 import { parse } from 'csv-parse/sync';
 
 // Helper function to parse the CSV data
@@ -28,18 +28,20 @@ function parseClockifyCSV(csvContent: string) {
     const endTime = record['End Time'];
     
     // Create a unique ID for this entry to prevent duplicates
-    const uniqueEntryId = `${record['User']}-${startDateStr}-${startTime}-${record['Project']}-${record['Description'] || ''}`;
+    // Limit the description to keep uniqueEntryId under 255 chars
+    const description = record['Description'] || '';
+    const truncatedDescription = description.length > 100 ? description.substring(0, 100) : description;
+    const uniqueEntryId = `${record['User']}-${startDateStr}-${startTime}-${record['Project']}-${truncatedDescription}`.substring(0, 254);
     
     return {
       employeeClockifyName: record['User'],
-      project: record['Project'],
-      client: record['Client'] || '',
+      project: (record['Project'] || '').substring(0, 99),
+      client: (record['Client'] || '').substring(0, 99),
       description: record['Description'] || '',
-      task: record['Task'] || '',
-      group: record['Group'] || '',
-      email: record['Email'] || '',
-      tags: record['Tags'] || '',
-      billable: record['Billable']?.toLowerCase() === 'yes',
+      task: (record['Task'] || '').substring(0, 99),
+      group: (record['Group'] || '').substring(0, 99),
+      email: (record['Email'] || '').substring(0, 254),
+      tags: (record['Tags'] || '').substring(0, 254),
       startDate,
       startTime,
       endDate,
@@ -66,12 +68,29 @@ export async function POST(request: NextRequest) {
     // Read file contents
     const fileContents = await file.text();
     
-    // Parse the CSV
-    const timeRecords = parseClockifyCSV(fileContents);
-    
-    if (!timeRecords.length) {
+    // Check if file is empty
+    if (!fileContents || fileContents.trim() === '') {
       return NextResponse.json(
-        { error: 'No valid records found in CSV' },
+        { error: 'Empty file provided', success: false },
+        { status: 400 }
+      );
+    }
+    
+    // Parse the CSV
+    let timeRecords;
+    try {
+      timeRecords = parseClockifyCSV(fileContents);
+      
+      if (!timeRecords.length) {
+        return NextResponse.json(
+          { error: 'No valid records found in CSV', success: false },
+          { status: 400 }
+        );
+      }
+    } catch (error: any) {
+      console.error('Error parsing CSV:', error);
+      return NextResponse.json(
+        { error: 'Failed to parse CSV file', success: false, details: error.message || String(error) },
         { status: 400 }
       );
     }
@@ -94,7 +113,10 @@ export async function POST(request: NextRequest) {
     }).returning();
 
     // Get all employees to match with Clockify names
-    const employeesList = await db.query.employees.findMany();
+    const employeesList = await db.select({
+      id: employees.id,
+      clockifyName: employees.clockifyName
+    }).from(employees);
     const employeeMap = new Map(
       employeesList.map(emp => [emp.clockifyName, emp])
     );
@@ -143,7 +165,6 @@ export async function POST(request: NextRequest) {
         group: record.group,
         email: record.email,
         tags: record.tags,
-        billable: record.billable,
         startDate: formattedStartDate,
         startTime: record.startTime,
         endDate: formattedEndDate,
@@ -155,12 +176,31 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // Initialize counters
+    let insertedCount = 0;
+    let skippedCount = 0;
+    
     if (timeEntriesToInsert.length > 0) {
-      // Insert time entries in batches to avoid hitting limits
-      const batchSize = 100;
-      for (let i = 0; i < timeEntriesToInsert.length; i += batchSize) {
-        const batch = timeEntriesToInsert.slice(i, i + batchSize);
-        await db.insert(timeEntries).values(batch);
+      // Process entries one by one to handle duplicates
+      for (const entry of timeEntriesToInsert) {
+        try {
+          // Try to insert the entry
+          await db.insert(timeEntries).values(entry);
+          insertedCount++;
+        } catch (error: any) {
+          // If it's a duplicate key error, just skip it
+          if (error.code === '23505' && error.constraint === 'time_entries_unique_entry_id_unique') {
+            skippedCount++;
+          } else {
+            // For other errors, rethrow
+            throw error;
+          }
+        }
+      }
+      
+      // Add skipped entries to errors list
+      if (skippedCount > 0) {
+        errors.push(`Skipped ${skippedCount} entries that were already imported.`);
       }
     }
 
@@ -181,13 +221,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       importId: importLog.id,
-      entriesImported: timeEntriesToInsert.length,
+      entriesImported: insertedCount,
+      totalEntries: timeEntriesToInsert.length,
+      skippedEntries: skippedCount,
       errors: errors.length > 0 ? errors : undefined,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error processing import:', error);
     return NextResponse.json(
-      { error: 'Failed to process import' },
+      { 
+        error: 'Failed to process import', 
+        success: false,
+        details: error.message || String(error),
+        code: error.code,
+        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      },
       { status: 500 }
     );
   }

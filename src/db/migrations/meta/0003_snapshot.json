@@ -1,8 +1,8 @@
 {
-  "version": "7",
-  "dialect": "postgresql",
-  "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-  "prevId": "0000_snapshot",
+  "version": "5",
+  "dialect": "pg",
+  "id": "a9a9a9a9-a9a9-a9a9-a9a9-a9a9a9a9a9a9",
+  "prevId": "b8b8b8b8-b8b8-b8b8-b8b8-b8b8b8b8b8b8",
   "tables": {
     "employees": {
       "name": "employees",
@@ -20,42 +20,92 @@
           "primaryKey": false,
           "notNull": true
         },
+        "email": {
+          "name": "email",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
         "department": {
           "name": "department",
           "type": "varchar(100)",
           "primaryKey": false,
           "notNull": true
         },
-        "employment_type": {
+        "employmentType": {
           "name": "employment_type",
           "type": "varchar(50)",
           "primaryKey": false,
           "notNull": true
         },
-        "weekly_committed_hours": {
+        "weeklyCommittedHours": {
           "name": "weekly_committed_hours",
           "type": "integer",
           "primaryKey": false,
           "notNull": true
         },
-        "start_date": {
+        "startDate": {
           "name": "start_date",
           "type": "date",
           "primaryKey": false,
           "notNull": true
         },
-        "is_active": {
+        "isActive": {
           "name": "is_active",
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,
           "default": true
         },
-        "clockify_name": {
+        "clockifyName": {
           "name": "clockify_name",
           "type": "varchar(255)",
           "primaryKey": false,
           "notNull": true
+        },
+        "phone": {
+          "name": "phone",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "position": {
+          "name": "position",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "joinDate": {
+          "name": "join_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "bio": {
+          "name": "bio",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "avatarUrl": {
+          "name": "avatar_url",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "CURRENT_TIMESTAMP"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "CURRENT_TIMESTAMP"
         }
       },
       "indexes": {},
@@ -81,36 +131,50 @@
           "primaryKey": true,
           "notNull": true
         },
-        "start_date": {
+        "startDate": {
           "name": "start_date",
           "type": "date",
           "primaryKey": false,
           "notNull": true
         },
-        "end_date": {
+        "endDate": {
           "name": "end_date",
           "type": "date",
           "primaryKey": false,
           "notNull": true
         },
-        "import_date": {
+        "importDate": {
           "name": "import_date",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
-          "default": "now()"
+          "default": "CURRENT_TIMESTAMP"
         },
         "status": {
           "name": "status",
-          "type": "varchar(20)",
+          "type": "varchar(50)",
           "primaryKey": false,
           "notNull": true
         },
-        "file_name": {
+        "fileName": {
           "name": "file_name",
           "type": "varchar(255)",
           "primaryKey": false,
           "notNull": true
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "CURRENT_TIMESTAMP"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "CURRENT_TIMESTAMP"
         }
       },
       "indexes": {},
@@ -128,7 +192,7 @@
           "primaryKey": true,
           "notNull": true
         },
-        "employee_id": {
+        "employeeId": {
           "name": "employee_id",
           "type": "integer",
           "primaryKey": false,
@@ -142,13 +206,13 @@
         },
         "project": {
           "name": "project",
-          "type": "varchar(100)",
+          "type": "varchar(255)",
           "primaryKey": false,
           "notNull": true
         },
         "client": {
           "name": "client",
-          "type": "varchar(100)",
+          "type": "varchar(255)",
           "primaryKey": false,
           "notNull": false
         },
@@ -160,13 +224,13 @@
         },
         "task": {
           "name": "task",
-          "type": "varchar(100)",
+          "type": "varchar(255)",
           "primaryKey": false,
           "notNull": false
         },
         "group": {
           "name": "group",
-          "type": "varchar(100)",
+          "type": "varchar(255)",
           "primaryKey": false,
           "notNull": false
         },
@@ -186,58 +250,102 @@
           "name": "billable",
           "type": "boolean",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true,
+          "default": false
         },
-        "start_date": {
+        "startDate": {
           "name": "start_date",
           "type": "date",
           "primaryKey": false,
           "notNull": true
         },
-        "start_time": {
+        "startTime": {
           "name": "start_time",
-          "type": "time",
+          "type": "varchar(50)",
           "primaryKey": false,
           "notNull": true
         },
-        "end_date": {
+        "endDate": {
           "name": "end_date",
           "type": "date",
           "primaryKey": false,
           "notNull": true
         },
-        "end_time": {
+        "endTime": {
           "name": "end_time",
-          "type": "time",
+          "type": "varchar(50)",
           "primaryKey": false,
           "notNull": true
         },
-        "hours_worked": {
+        "hoursWorked": {
           "name": "hours_worked",
-          "type": "time",
+          "type": "varchar(50)",
           "primaryKey": false,
           "notNull": true
         },
-        "duration_decimal": {
+        "durationDecimal": {
           "name": "duration_decimal",
           "type": "decimal(10, 2)",
           "primaryKey": false,
           "notNull": false
         },
-        "unique_entry_id": {
+        "uniqueEntryId": {
           "name": "unique_entry_id",
           "type": "varchar(255)",
           "primaryKey": false,
           "notNull": true
         },
-        "import_batch_id": {
+        "importBatchId": {
           "name": "import_batch_id",
           "type": "integer",
           "primaryKey": false,
           "notNull": true
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "CURRENT_TIMESTAMP"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "CURRENT_TIMESTAMP"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "time_entries_employee_id_idx": {
+          "name": "time_entries_employee_id_idx",
+          "columns": [
+            "employee_id"
+          ],
+          "isUnique": false
+        },
+        "time_entries_date_idx": {
+          "name": "time_entries_date_idx",
+          "columns": [
+            "date"
+          ],
+          "isUnique": false
+        },
+        "time_entries_project_idx": {
+          "name": "time_entries_project_idx",
+          "columns": [
+            "project"
+          ],
+          "isUnique": false
+        },
+        "time_entries_import_batch_id_idx": {
+          "name": "time_entries_import_batch_id_idx",
+          "columns": [
+            "import_batch_id"
+          ],
+          "isUnique": false
+        }
+      },
       "foreignKeys": {
         "time_entries_employee_id_employees_id_fk": {
           "name": "time_entries_employee_id_employees_id_fk",
@@ -249,7 +357,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         },
         "time_entries_import_batch_id_import_logs_id_fk": {
@@ -262,7 +370,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },

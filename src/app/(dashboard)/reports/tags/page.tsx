@@ -14,17 +14,17 @@ import {
   TableHeader, 
   TableRow 
 } from "@/components/ui/table";
-import { ArrowLeft, FileText } from "lucide-react";
+import { ArrowLeft, Tag } from "lucide-react";
 
 export const metadata: Metadata = {
-  title: "Tasks Report - Time Tracking System",
+  title: "Tags Report - Time Tracking System",
 };
 
-export default async function TasksReportPage() {
-  // Get tasks with total hours
-  const taskStats = await db
+export default async function TagsReportPage() {
+  // Get tags with total hours
+  const tagStats = await db
     .select({
-      task: timeEntries.task,
+      tag: timeEntries.tags,
       totalHours: sql<number>`SUM(CAST(${timeEntries.durationDecimal} AS DECIMAL))`,
       entriesCount: sql<number>`COUNT(*)`,
       employeesCount: sql<number>`COUNT(DISTINCT ${timeEntries.employeeId})`,
@@ -32,40 +32,40 @@ export default async function TasksReportPage() {
       lastWorked: sql<string>`MAX(${timeEntries.date})`,
     })
     .from(timeEntries)
-    .where(isNotNull(timeEntries.task))
-    .groupBy(timeEntries.task)
+    .where(isNotNull(timeEntries.tags))
+    .groupBy(timeEntries.tags)
     .orderBy(desc(sql`SUM(CAST(${timeEntries.durationDecimal} AS DECIMAL))`));
 
-  // Get top employees by task count
-  const employeeTaskStats = await db
+  // Get top employees by tag count
+  const employeeTagStats = await db
     .select({
       employeeId: timeEntries.employeeId,
       employeeName: employees.name,
-      taskCount: sql<number>`COUNT(DISTINCT CASE WHEN ${timeEntries.task} IS NOT NULL THEN ${timeEntries.task} END)`,
+      tagCount: sql<number>`COUNT(DISTINCT CASE WHEN ${timeEntries.tags} IS NOT NULL THEN ${timeEntries.tags} END)`,
       totalHours: sql<number>`SUM(CAST(${timeEntries.durationDecimal} AS DECIMAL))`,
     })
     .from(timeEntries)
     .innerJoin(employees, eq(timeEntries.employeeId, employees.id))
-    .where(isNotNull(timeEntries.task))
+    .where(isNotNull(timeEntries.tags))
     .groupBy(timeEntries.employeeId, employees.name)
-    .orderBy(desc(sql`COUNT(DISTINCT CASE WHEN ${timeEntries.task} IS NOT NULL THEN ${timeEntries.task} END)`))
+    .orderBy(desc(sql`COUNT(DISTINCT CASE WHEN ${timeEntries.tags} IS NOT NULL THEN ${timeEntries.tags} END)`))
     .limit(5);
 
   // Calculate overall stats
-  const totalTaskHours = taskStats.reduce((sum, task) => sum + Number(task.totalHours), 0);
-  const totalTaskEntries = taskStats.reduce((sum, task) => sum + Number(task.entriesCount), 0);
-  const uniqueTasks = taskStats.length;
+  const totalTagHours = tagStats.reduce((sum, tag) => sum + Number(tag.totalHours), 0);
+  const totalTagEntries = tagStats.reduce((sum, tag) => sum + Number(tag.entriesCount), 0);
+  const uniqueTags = tagStats.length;
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-2">
-            <FileText className="h-8 w-8" />
-            Tasks Report
+            <Tag className="h-8 w-8" />
+            Tags Report
           </h1>
           <p className="text-muted-foreground">
-            Analysis of time spent on different tasks
+            Analysis of time spent on different tags
           </p>
         </div>
         <Button variant="outline" asChild>
@@ -80,52 +80,52 @@ export default async function TasksReportPage() {
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Total Task Hours</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Tagged Hours</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalTaskHours.toFixed(2)}</div>
+            <div className="text-2xl font-bold">{totalTagHours.toFixed(2)}</div>
             <p className="text-xs text-muted-foreground">
-              Hours tracked across all tasks
+              Hours tracked across all tagged entries
             </p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Task Entries</CardTitle>
+            <CardTitle className="text-sm font-medium">Tagged Entries</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalTaskEntries}</div>
+            <div className="text-2xl font-bold">{totalTagEntries}</div>
             <p className="text-xs text-muted-foreground">
-              Total number of task entries
+              Total number of entries with tags
             </p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Unique Tasks</CardTitle>
+            <CardTitle className="text-sm font-medium">Unique Tags</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{uniqueTasks}</div>
+            <div className="text-2xl font-bold">{uniqueTags}</div>
             <p className="text-xs text-muted-foreground">
-              Different tasks tracked
+              Different tags used
             </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Tasks Table */}
+      {/* Tags Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Tasks by Time Spent</CardTitle>
+          <CardTitle>Tags by Time Spent</CardTitle>
           <CardDescription>
-            Breakdown of hours spent on each task
+            Breakdown of hours spent on each tag
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Task</TableHead>
+                <TableHead>Tag</TableHead>
                 <TableHead className="text-right">Hours</TableHead>
                 <TableHead className="text-right">Entries</TableHead>
                 <TableHead className="text-right">Employees</TableHead>
@@ -134,21 +134,21 @@ export default async function TasksReportPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {taskStats.length === 0 ? (
+              {tagStats.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center text-muted-foreground">
-                    No task data available
+                    No tag data available
                   </TableCell>
                 </TableRow>
               ) : (
-                taskStats.map((task) => (
-                  <TableRow key={task.task}>
-                    <TableCell className="font-medium">{task.task || "Unspecified"}</TableCell>
-                    <TableCell className="text-right">{Number(task.totalHours).toFixed(2)}</TableCell>
-                    <TableCell className="text-right">{task.entriesCount}</TableCell>
-                    <TableCell className="text-right">{task.employeesCount}</TableCell>
-                    <TableCell className="text-right">{Number(task.avgDuration).toFixed(2)}</TableCell>
-                    <TableCell>{new Date(task.lastWorked).toLocaleDateString()}</TableCell>
+                tagStats.map((tag) => (
+                  <TableRow key={tag.tag}>
+                    <TableCell className="font-medium">{tag.tag || "Unspecified"}</TableCell>
+                    <TableCell className="text-right">{Number(tag.totalHours).toFixed(2)}</TableCell>
+                    <TableCell className="text-right">{tag.entriesCount}</TableCell>
+                    <TableCell className="text-right">{tag.employeesCount}</TableCell>
+                    <TableCell className="text-right">{Number(tag.avgDuration).toFixed(2)}</TableCell>
+                    <TableCell>{new Date(tag.lastWorked).toLocaleDateString()}</TableCell>
                   </TableRow>
                 ))
               )}
@@ -157,12 +157,12 @@ export default async function TasksReportPage() {
         </CardContent>
       </Card>
 
-      {/* Top Employees by Task Diversity */}
+      {/* Top Employees by Tag Diversity */}
       <Card>
         <CardHeader>
-          <CardTitle>Top Employees by Task Diversity</CardTitle>
+          <CardTitle>Top Employees by Tag Diversity</CardTitle>
           <CardDescription>
-            Employees working on the most different tasks
+            Employees working with the most different tags
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -170,22 +170,22 @@ export default async function TasksReportPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Employee</TableHead>
-                <TableHead className="text-right">Unique Tasks</TableHead>
+                <TableHead className="text-right">Unique Tags</TableHead>
                 <TableHead className="text-right">Total Hours</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {employeeTaskStats.length === 0 ? (
+              {employeeTagStats.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={3} className="text-center text-muted-foreground">
-                    No employee task data available
+                    No employee tag data available
                   </TableCell>
                 </TableRow>
               ) : (
-                employeeTaskStats.map((employee) => (
+                employeeTagStats.map((employee) => (
                   <TableRow key={employee.employeeId}>
                     <TableCell className="font-medium">{employee.employeeName}</TableCell>
-                    <TableCell className="text-right">{employee.taskCount}</TableCell>
+                    <TableCell className="text-right">{employee.tagCount}</TableCell>
                     <TableCell className="text-right">{Number(employee.totalHours).toFixed(2)}</TableCell>
                   </TableRow>
                 ))

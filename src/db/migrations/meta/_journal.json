@@ -1,19 +1,40 @@
 {
-  "version": "7",
-  "dialect": "postgresql",
+  "version": "5",
+  "dialect": "pg",
   "entries": [
     {
       "idx": 0,
-      "version": "7",
-      "when": 1745351805503,
-      "tag": "0000_busy_luckman",
+      "version": "5",
+      "when": 1714000000000,
+      "tag": "0000_initial_schema",
       "breakpoints": true
     },
     {
       "idx": 1,
-      "version": "7",
-      "when": 1745351900000,
+      "version": "5",
+      "when": 1714000000001,
       "tag": "0001_detailed_time_entries",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1714000000002,
+      "tag": "0002_enhanced_employees",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1714000000003,
+      "tag": "0003_required_email",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1714000000004,
+      "tag": "0004_remove_billable",
       "breakpoints": true
     }
   ]

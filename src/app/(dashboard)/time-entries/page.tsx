@@ -41,10 +41,15 @@ export default async function TimeEntriesPage({
   const endDate = typeof params.endDate === 'string' ? params.endDate : undefined;
 
   // Fetch all employees for the filter dropdown
-  const employeesList = await db.query.employees.findMany({
-    orderBy: employees.name,
-    where: eq(employees.isActive, true)
-  });
+  const employeesList = await db
+    .select({
+      id: employees.id,
+      name: employees.name,
+      isActive: employees.isActive
+    })
+    .from(employees)
+    .where(eq(employees.isActive, true))
+    .orderBy(employees.name);
 
   // Build conditions for the query
   const conditions = [];
@@ -71,7 +76,6 @@ export default async function TimeEntriesPage({
     description: timeEntries.description,
     task: timeEntries.task,
     tags: timeEntries.tags,
-    billable: timeEntries.billable,
     startDate: timeEntries.startDate,
     startTime: timeEntries.startTime,
     endDate: timeEntries.endDate,
@@ -79,8 +83,7 @@ export default async function TimeEntriesPage({
     hoursWorked: timeEntries.hoursWorked,
     durationDecimal: timeEntries.durationDecimal,
     employeeId: timeEntries.employeeId,
-    employeeName: employees.name,
-    email: timeEntries.email,
+    employeeName: employees.name
   })
   .from(timeEntries)
   .innerJoin(employees, eq(timeEntries.employeeId, employees.id))
@@ -173,10 +176,10 @@ export default async function TimeEntriesPage({
               <TableHead>Client</TableHead>
               <TableHead>Description</TableHead>
               <TableHead>Task</TableHead>
+              <TableHead>Tags</TableHead>
               <TableHead>Start</TableHead>
               <TableHead>End</TableHead>
               <TableHead>Hours</TableHead>
-              <TableHead>Billable</TableHead>
               <TableHead>Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -202,6 +205,7 @@ export default async function TimeEntriesPage({
                     )}
                   </TableCell>
                   <TableCell>{entry.task || '-'}</TableCell>
+                  <TableCell>{entry.tags || '-'}</TableCell>
                   <TableCell>
                     {format(new Date(entry.startDate), 'MM/dd/yyyy')} {entry.startTime}
                   </TableCell>
@@ -209,7 +213,6 @@ export default async function TimeEntriesPage({
                     {format(new Date(entry.endDate), 'MM/dd/yyyy')} {entry.endTime}
                   </TableCell>
                   <TableCell>{entry.hoursWorked}</TableCell>
-                  <TableCell>{entry.billable ? 'Yes' : 'No'}</TableCell>
                   <TableCell>
                     <Button variant="ghost" size="sm" asChild>
                       <Link href={`/time-entries/${entry.id}`}>

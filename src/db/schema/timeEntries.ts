@@ -12,7 +12,6 @@ export const timeEntries = pgTable('time_entries', {
   group: varchar('group', { length: 100 }),
   email: varchar('email', { length: 255 }),
   tags: varchar('tags', { length: 255 }),
-  billable: boolean('billable'),
   startDate: date('start_date').notNull(),
   startTime: time('start_time').notNull(),
   endDate: date('end_date').notNull(),

@@ -23,9 +23,19 @@ export const metadata: Metadata = {
 
 export default async function EmployeesPage() {
   // Fetch employees from the database
-  const employeesList = await db.query.employees.findMany({
-    orderBy: (employees, { desc }) => [desc(employees.isActive), employees.name],
-  });
+  const employeesList = await db
+    .select({
+      id: employees.id,
+      name: employees.name,
+      department: employees.department,
+      employmentType: employees.employmentType,
+      weeklyCommittedHours: employees.weeklyCommittedHours,
+      startDate: employees.startDate,
+      isActive: employees.isActive,
+      clockifyName: employees.clockifyName
+    })
+    .from(employees)
+    .orderBy(desc(employees.isActive), employees.name);
 
   return (
     <div className="space-y-6">

@@ -1,9 +1,8 @@
 import { Metadata } from "next";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { FileUp, Info, Calendar, CheckCircle, AlertCircle, Clock } from "lucide-react";
+import { Info, CheckCircle, AlertCircle, Clock } from "lucide-react";
+import { ImportForm } from "@/components/forms/ImportForm";
 import { db } from "@/db";
 import { importLogs } from "@/db/schema";
 import { desc } from "drizzle-orm";
@@ -30,61 +29,7 @@ export default async function ImportPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-6">
-          <Card className="shadow-sm">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>Upload Time Report</CardTitle>
-                  <CardDescription>
-                    Import time tracking data from Clockify CSV exports
-                  </CardDescription>
-                </div>
-                <FileUp className="h-5 w-5 text-primary" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <form action="/api/import" method="post" encType="multipart/form-data" className="space-y-6">
-                <div className="border-2 border-dashed border-muted-foreground/20 rounded-lg p-6 text-center hover:border-primary/50 transition-colors">
-                  <div className="flex flex-col items-center justify-center space-y-2">
-                    <div className="rounded-full bg-primary/10 p-3">
-                      <FileUp className="h-6 w-6 text-primary" />
-                    </div>
-                    <div className="text-sm font-medium">
-                      Drag and drop your CSV file here, or click to browse
-                    </div>
-                    <Input 
-                      type="file" 
-                      id="file" 
-                      name="file"
-                      accept=".csv" 
-                      required
-                      className="w-full max-w-xs"
-                    />
-                    <p className="text-xs text-muted-foreground max-w-md">
-                      Upload a Clockify time report in CSV format. File should contain employee names, project names, dates, and durations.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="p-3 bg-muted rounded-md mb-4">
-                  <p className="text-sm text-muted-foreground">
-                    <strong>Note:</strong> Date range will be automatically extracted from the CSV file. No need to specify start and end dates.
-                  </p>
-                </div>
-                
-                {/* Hidden fields for API compatibility */}
-                <input type="hidden" id="startDate" name="startDate" value="2025-01-01" />
-                <input type="hidden" id="endDate" name="endDate" value="2025-12-31" />
-
-                <div className="flex justify-end">
-                  <Button type="submit" className="w-full sm:w-auto">
-                    <FileUp className="mr-2 h-4 w-4" />
-                    Upload and Process
-                  </Button>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
+          <ImportForm />
 
           <Card className="shadow-sm">
             <CardHeader>
