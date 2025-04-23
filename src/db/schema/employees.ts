@@ -12,7 +12,7 @@ export enum EmploymentType {
 export const employees = pgTable('employees', {
   id: serial('id').primaryKey(),
   name: varchar('name', { length: 255 }).notNull(),
-  email: varchar('email', { length: 255 }).notNull(),
+  email: varchar('email', { length: 255 }).notNull().unique(),
   phone: varchar('phone', { length: 50 }),
   position: varchar('position', { length: 100 }),
   department: varchar('department', { length: 100 }).notNull(),
@@ -21,7 +21,7 @@ export const employees = pgTable('employees', {
   startDate: date('start_date').notNull(),
   joinDate: date('join_date'),
   isActive: boolean('is_active').default(true).notNull(),
-  clockifyName: varchar('clockify_name', { length: 255 }).notNull().unique(),
+  clockifyName: varchar('clockify_name', { length: 255 }),
   bio: text('bio'),
   avatarUrl: varchar('avatar_url', { length: 255 }),
 });

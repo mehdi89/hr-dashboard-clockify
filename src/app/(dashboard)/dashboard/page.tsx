@@ -6,7 +6,7 @@ import { employees, timeEntries, importLogs } from "@/db/schema";
 import { format, startOfWeek, endOfWeek } from "date-fns";
 import { eq, and, gte, lte, sql, desc } from "drizzle-orm";
 import { DateRangeProvider } from "@/contexts/DateRangeContext";
-import { DateRangeSelector } from "@/components/DateRangeSelector";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { EmployeeCommitmentChart } from "@/components/charts/EmployeeCommitmentChart";
 import { EfficiencyChart } from "@/components/charts/EfficiencyChart";
 import { DailyWorkChart } from "@/components/charts/DailyWorkChart";
@@ -109,7 +109,7 @@ export default async function DashboardPage() {
           <p className="text-muted-foreground">Overview of employee time tracking data</p>
         </div>
         
-        <DateRangeSelector />
+        <DateRangePicker showCard />
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-8">
         {/* Summary Cards */}

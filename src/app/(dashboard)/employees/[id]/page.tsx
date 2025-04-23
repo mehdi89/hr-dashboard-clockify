@@ -16,6 +16,7 @@ import {
   TableRow 
 } from "@/components/ui/table";
 import { ArrowLeft, Clock, Edit, Mail, Phone, User } from "lucide-react";
+import { EmployeeEfficiencyWidget } from "../_components/EmployeeEfficiencyWidget";
 
 export const metadata: Metadata = {
   title: "Employee Details - Time Tracking System",
@@ -172,8 +173,13 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
           </CardContent>
         </Card>
 
+        {/* Efficiency Widget */}
+      <div className="md:col-span-2 space-y-6">
+        {/* Efficiency Report */}
+        <EmployeeEfficiencyWidget employeeId={employeeId} />
+        
         {/* Time Tracking Summary */}
-        <Card className="md:col-span-2">
+        <Card>
           <CardHeader>
             <CardTitle>Time Tracking Summary</CardTitle>
             <CardDescription>
@@ -231,6 +237,7 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
             </div>
           </CardContent>
         </Card>
+      </div>
       </div>
 
       {/* Recent Time Entries */}

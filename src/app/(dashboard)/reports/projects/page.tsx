@@ -1,8 +1,7 @@
-import { Metadata } from "next";
+"use client";
+
 import Link from "next/link";
-import { db } from "@/db";
-import { timeEntries, employees } from "@/db/schema";
-import { desc, sql, eq, and, isNotNull } from "drizzle-orm";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { 
@@ -15,101 +14,86 @@ import {
   TableRow 
 } from "@/components/ui/table";
 import { ArrowLeft, PieChart } from "lucide-react";
+import { DateRangeProvider, useDateRange } from "@/contexts/DateRangeContext";
+import { DateRangeSelector } from "@/components/DateRangeSelector";
+import { startOfWeek, endOfWeek } from "date-fns";
+import { fetchProjectDistributionData, ProjectDistributionData, EmployeeProjectDistribution } from "./actions";
+import { ProjectDistributionPieChart } from "./_components/ProjectDistributionPieChart";
+import { ProjectTimelineChart } from "./_components/ProjectTimelineChart";
+import { ProjectWorkloadDistribution } from "./_components/ProjectWorkloadDistribution";
+import { TeamCollaborationMetrics } from "./_components/TeamCollaborationMetrics";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
 
-export const metadata: Metadata = {
-  title: "Project Distribution - Time Tracking System",
+// Define types for employee projects
+type ProjectSummary = {
+  project: string;
+  totalHours: number;
+  entriesCount: number;
 };
 
-export default async function ProjectsReportPage() {
-  // Get project distribution by employee
-  const projectEmployeeDistribution = await db
-    .select({
-      employeeId: timeEntries.employeeId,
-      employeeName: employees.name,
-      project: timeEntries.project,
-      totalHours: sql<number>`SUM(CAST(${timeEntries.durationDecimal} AS DECIMAL))`,
-      entriesCount: sql<number>`COUNT(*)`,
-    })
-    .from(timeEntries)
-    .innerJoin(employees, eq(timeEntries.employeeId, employees.id))
-    .groupBy(timeEntries.employeeId, employees.name, timeEntries.project)
-    .orderBy(employees.name, desc(sql`SUM(CAST(${timeEntries.durationDecimal} AS DECIMAL))`));
+type EmployeeProjectSummary = {
+  employeeId: number;
+  employeeName: string;
+  projects: ProjectSummary[];
+  totalHours: number;
+};
 
-  // Get top projects by hours
-  const topProjects = await db
-    .select({
-      project: timeEntries.project,
-      totalHours: sql<number>`SUM(CAST(${timeEntries.durationDecimal} AS DECIMAL))`,
-      entriesCount: sql<number>`COUNT(*)`,
-      employeesCount: sql<number>`COUNT(DISTINCT ${timeEntries.employeeId})`,
-      avgDuration: sql<number>`AVG(CAST(${timeEntries.durationDecimal} AS DECIMAL))`,
-      firstWorked: sql<string>`MIN(${timeEntries.date})`,
-      lastWorked: sql<string>`MAX(${timeEntries.date})`,
-    })
-    .from(timeEntries)
-    .groupBy(timeEntries.project)
-    .orderBy(desc(sql`SUM(CAST(${timeEntries.durationDecimal} AS DECIMAL))`))
-    .limit(10);
+function ProjectDistributionContent() {
+  const { dateRange } = useDateRange();
+  const [data, setData] = useState<ProjectDistributionData | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [employeeProjectsList, setEmployeeProjectsList] = useState<EmployeeProjectSummary[]>([]);
 
-  // Get project-client relationship
-  const projectClientRelationship = await db
-    .select({
-      project: timeEntries.project,
-      client: timeEntries.client,
-      totalHours: sql<number>`SUM(CAST(${timeEntries.durationDecimal} AS DECIMAL))`,
-      entriesCount: sql<number>`COUNT(*)`,
-      employeesCount: sql<number>`COUNT(DISTINCT ${timeEntries.employeeId})`,
-    })
-    .from(timeEntries)
-    .where(isNotNull(timeEntries.client))
-    .groupBy(timeEntries.project, timeEntries.client)
-    .orderBy(timeEntries.project, desc(sql`SUM(CAST(${timeEntries.durationDecimal} AS DECIMAL))`));
-
-  // Define types for employee projects
-  type ProjectSummary = {
-    project: string;
-    totalHours: number;
-    entriesCount: number;
-  };
-
-  type EmployeeProjectSummary = {
-    employeeId: number;
-    employeeName: string;
-    projects: ProjectSummary[];
-    totalHours: number;
-  };
-
-  // Group project-employee data by employee
-  const employeeProjects: Record<number, EmployeeProjectSummary> = {};
-  
-  projectEmployeeDistribution.forEach(item => {
-    const id = Number(item.employeeId);
-    
-    if (!employeeProjects[id]) {
-      employeeProjects[id] = {
-        employeeId: id,
-        employeeName: item.employeeName,
-        projects: [],
-        totalHours: 0
-      };
+  useEffect(() => {
+    async function loadData() {
+      if (dateRange?.from && dateRange?.to) {
+        setLoading(true);
+        try {
+          const startDate = dateRange.from.toISOString().split('T')[0];
+          const endDate = dateRange.to.toISOString().split('T')[0];
+          
+          const projectData = await fetchProjectDistributionData(startDate, endDate);
+          setData(projectData);
+          
+          // Group project-employee data by employee
+          const employeeProjects: Record<number, EmployeeProjectSummary> = {};
+          
+          projectData.projectEmployeeDistribution.forEach(item => {
+            const id = Number(item.employeeId);
+            
+            if (!employeeProjects[id]) {
+              employeeProjects[id] = {
+                employeeId: id,
+                employeeName: item.employeeName,
+                projects: [],
+                totalHours: 0
+              };
+            }
+            
+            employeeProjects[id].projects.push({
+              project: item.project,
+              totalHours: Number(item.totalHours),
+              entriesCount: Number(item.entriesCount)
+            });
+            
+            employeeProjects[id].totalHours += Number(item.totalHours);
+          });
+          
+          // Convert to array and sort by total hours
+          const employeeProjectsList = Object.values(employeeProjects)
+            .sort((a, b) => b.totalHours - a.totalHours);
+          
+          setEmployeeProjectsList(employeeProjectsList);
+        } catch (error) {
+          console.error("Error fetching project distribution data:", error);
+        } finally {
+          setLoading(false);
+        }
+      }
     }
-    
-    employeeProjects[id].projects.push({
-      project: item.project,
-      totalHours: Number(item.totalHours),
-      entriesCount: Number(item.entriesCount)
-    });
-    
-    employeeProjects[id].totalHours += Number(item.totalHours);
-  });
 
-  // Convert to array and sort by total hours
-  const employeeProjectsList: EmployeeProjectSummary[] = Object.values(employeeProjects)
-    .sort((a, b) => b.totalHours - a.totalHours);
-
-  // Calculate overall stats
-  const totalProjectHours = topProjects.reduce((sum, project) => sum + Number(project.totalHours), 0);
-  const uniqueProjects = topProjects.length;
+    loadData();
+  }, [dateRange]);
 
   return (
     <div className="space-y-6">
@@ -131,186 +115,185 @@ export default async function ProjectsReportPage() {
         </Button>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Total Project Hours</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalProjectHours.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground">
-              Hours tracked across all projects
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Unique Projects</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{uniqueProjects}</div>
-            <p className="text-xs text-muted-foreground">
-              Different projects tracked
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Avg. Hours per Project</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {uniqueProjects > 0 ? (totalProjectHours / uniqueProjects).toFixed(2) : "0.00"}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Average hours spent per project
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+      <DateRangePicker showCard />
 
-      {/* Top Projects Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Top Projects by Hours</CardTitle>
-          <CardDescription>
-            Projects with the most time spent
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Project</TableHead>
-                <TableHead className="text-right">Hours</TableHead>
-                <TableHead className="text-right">Entries</TableHead>
-                <TableHead className="text-right">Employees</TableHead>
-                <TableHead className="text-right">Avg. Duration</TableHead>
-                <TableHead>Date Range</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {topProjects.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground">
-                    No project data available
-                  </TableCell>
-                </TableRow>
+      {loading ? (
+        <div className="flex justify-center items-center py-12">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        </div>
+      ) : (
+        <>
+          {/* Summary Cards */}
+          <div className="grid gap-4 md:grid-cols-3">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Total Project Hours</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{data ? data.totalProjectHours.toFixed(2) : "0.00"}</div>
+                <p className="text-xs text-muted-foreground">
+                  Hours tracked across all projects
+                </p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Unique Projects</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{data ? data.uniqueProjects : 0}</div>
+                <p className="text-xs text-muted-foreground">
+                  Different projects tracked
+                </p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Avg. Hours per Project</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {data && data.uniqueProjects > 0 ? (data.totalProjectHours / data.uniqueProjects).toFixed(2) : "0.00"}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Average hours spent per project
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Visualization Grid */}
+          <div className="grid gap-6 md:grid-cols-2">
+            {data && <ProjectDistributionPieChart data={data.topProjects} />}
+            {data && <ProjectTimelineChart data={data.topProjects} />}
+            {/* {data && <ProjectWorkloadDistribution data={data.projectEmployeeDistribution} />} */}
+            {/* {data && <TeamCollaborationMetrics data={data.projectEmployeeDistribution} />} */}
+          </div>
+
+          {/* Team collaboration Metrics  */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Team Collaboration Metrics</CardTitle>
+              <CardDescription>
+                How team members work together on projects
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {data && <TeamCollaborationMetrics data={data.projectEmployeeDistribution} />}
+            </CardContent>
+          </Card>
+
+          {/* Employee Project Distribution */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Employee Project Distribution</CardTitle>
+              <CardDescription>
+                Projects worked on by each employee
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {employeeProjectsList.length === 0 ? (
+                <div className="text-center text-muted-foreground">
+                  No employee project data available
+                </div>
               ) : (
-                topProjects.map((project) => (
-                  <TableRow key={project.project}>
-                    <TableCell className="font-medium">{project.project}</TableCell>
-                    <TableCell className="text-right">{Number(project.totalHours).toFixed(2)}</TableCell>
-                    <TableCell className="text-right">{project.entriesCount}</TableCell>
-                    <TableCell className="text-right">{project.employeesCount}</TableCell>
-                    <TableCell className="text-right">{Number(project.avgDuration).toFixed(2)}</TableCell>
-                    <TableCell>
-                      {new Date(project.firstWorked).toLocaleDateString()} - {new Date(project.lastWorked).toLocaleDateString()}
-                    </TableCell>
-                  </TableRow>
+                employeeProjectsList.map((employee) => (
+                  <div key={employee.employeeId} className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg font-medium">
+                        <Link href={`/employees/${employee.employeeId}`} className="hover:underline">
+                          {employee.employeeName}
+                        </Link>
+                      </h3>
+                      <span className="text-sm text-muted-foreground">
+                        {employee.totalHours.toFixed(2)} hours across {employee.projects.length} projects
+                      </span>
+                    </div>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Project</TableHead>
+                          <TableHead className="text-right">Hours</TableHead>
+                          <TableHead className="text-right">Entries</TableHead>
+                          <TableHead className="text-right">% of Employee Time</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {employee.projects.map((project) => (
+                          <TableRow key={`${employee.employeeId}-${project.project}`}>
+                            <TableCell>{project.project}</TableCell>
+                            <TableCell className="text-right">{project.totalHours.toFixed(2)}</TableCell>
+                            <TableCell className="text-right">{project.entriesCount}</TableCell>
+                            <TableCell className="text-right">
+                              {((project.totalHours / employee.totalHours) * 100).toFixed(2)}%
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
                 ))
               )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
 
-      {/* Employee Project Distribution */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Employee Project Distribution</CardTitle>
-          <CardDescription>
-            Projects worked on by each employee
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {employeeProjectsList.length === 0 ? (
-            <div className="text-center text-muted-foreground">
-              No employee project data available
-            </div>
-          ) : (
-            employeeProjectsList.map((employee) => (
-              <div key={employee.employeeId} className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-medium">
-                    <Link href={`/employees/${employee.employeeId}`} className="hover:underline">
-                      {employee.employeeName}
-                    </Link>
-                  </h3>
-                  <span className="text-sm text-muted-foreground">
-                    {employee.totalHours.toFixed(2)} hours across {employee.projects.length} projects
-                  </span>
-                </div>
-                <Table>
-                  <TableHeader>
+          {/* Top Projects Table */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Top Projects by Hours</CardTitle>
+              <CardDescription>
+                Projects with the most time spent
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Project</TableHead>
+                    <TableHead className="text-right">Hours</TableHead>
+                    <TableHead className="text-right">Entries</TableHead>
+                    <TableHead className="text-right">Employees</TableHead>
+                    <TableHead className="text-right">Avg. Duration</TableHead>
+                    <TableHead className="text-right">Avg. Hours/Day</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {!data || data.topProjects.length === 0 ? (
                     <TableRow>
-                      <TableHead>Project</TableHead>
-                      <TableHead className="text-right">Hours</TableHead>
-                      <TableHead className="text-right">Entries</TableHead>
-                      <TableHead className="text-right">% of Employee Time</TableHead>
+                      <TableCell colSpan={7} className="text-center text-muted-foreground">
+                        No project data available
+                      </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {employee.projects.map((project) => (
-                      <TableRow key={`${employee.employeeId}-${project.project}`}>
-                        <TableCell>{project.project}</TableCell>
+                  ) : (
+                    data.topProjects.map((project) => (
+                      <TableRow key={project.project}>
+                        <TableCell className="font-medium">{project.project}</TableCell>
                         <TableCell className="text-right">{project.totalHours.toFixed(2)}</TableCell>
                         <TableCell className="text-right">{project.entriesCount}</TableCell>
-                        <TableCell className="text-right">
-                          {((project.totalHours / employee.totalHours) * 100).toFixed(2)}%
-                        </TableCell>
+                        <TableCell className="text-right">{project.employeesCount}</TableCell>
+                        <TableCell className="text-right">{project.avgDuration.toFixed(2)}</TableCell>
+                        <TableCell className="text-right">{project.avgHoursPerDay.toFixed(2)}</TableCell>
+                        
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            ))
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Project-Client Relationship */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Project-Client Relationship</CardTitle>
-          <CardDescription>
-            Mapping of projects to clients
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Project</TableHead>
-                <TableHead>Client</TableHead>
-                <TableHead className="text-right">Hours</TableHead>
-                <TableHead className="text-right">Entries</TableHead>
-                <TableHead className="text-right">Employees</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {projectClientRelationship.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground">
-                    No project-client data available
-                  </TableCell>
-                </TableRow>
-              ) : (
-                projectClientRelationship.map((relation, index) => (
-                  <TableRow key={`${relation.project}-${relation.client}-${index}`}>
-                    <TableCell className="font-medium">{relation.project}</TableCell>
-                    <TableCell>{relation.client || "Unspecified"}</TableCell>
-                    <TableCell className="text-right">{Number(relation.totalHours).toFixed(2)}</TableCell>
-                    <TableCell className="text-right">{relation.entriesCount}</TableCell>
-                    <TableCell className="text-right">{relation.employeesCount}</TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </>
+      )}
     </div>
+  );
+}
+
+export default function ProjectsReportPage() {
+  return (
+    <DateRangeProvider>
+      <div className="space-y-6">
+        {/* <DateRangePicker showCard /> */}
+        <ProjectDistributionContent />
+      </div>
+    </DateRangeProvider>
   );
 }

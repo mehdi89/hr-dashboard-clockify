@@ -36,6 +36,13 @@
       "when": 1714000000004,
       "tag": "0004_remove_billable",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1714000000005,
+      "tag": "0005_remove_clockify_name",
+      "breakpoints": true
     }
   ]
 }

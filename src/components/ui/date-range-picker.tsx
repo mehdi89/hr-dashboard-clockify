@@ -7,24 +7,36 @@ import { DateRange } from "react-day-picker";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useDateRange } from "@/contexts/DateRangeContext";
 
 export type DateRangePickerProps = {
-  value: DateRange | undefined;
-  onChange: (date: DateRange | undefined) => void;
+  value?: DateRange | undefined;
+  onChange?: (date: DateRange | undefined) => void;
   className?: string;
+  showCard?: boolean;
+  title?: string;
 };
 
 export function DateRangePicker({
-  value,
-  onChange,
+  value: propValue,
+  onChange: propOnChange,
   className,
+  showCard = false,
+  title = "Date Range",
 }: DateRangePickerProps) {
+  const { dateRange, setDateRange } = useDateRange();
+  
+  // Use props or context values
+  const value = propValue !== undefined ? propValue : dateRange;
+  const onChange = propOnChange || setDateRange;
+  
   const [isOpen, setIsOpen] = React.useState(false);
   const [selectedPreset, setSelectedPreset] = React.useState<string>("");
 
@@ -35,6 +47,16 @@ export function DateRangePicker({
     let to: Date | undefined;
 
     switch (preset) {
+      case "today": {
+        from = today;
+        to = today;
+        break;
+      }
+      case "yesterday": {
+        from = addDays(today, -1);
+        to = addDays(today, -1);
+        break;
+      }
       case "this-week": {
         from = startOfWeek(today, { weekStartsOn: 1 });
         to = endOfWeek(today, { weekStartsOn: 1 });
@@ -57,6 +79,11 @@ export function DateRangePicker({
         to = endOfMonth(lastMonthStart);
         break;
       }
+      case "last-3-months": {
+        from = addDays(today, -90); // Approximately 3 months
+        to = today;
+        break;
+      }
       case "custom": {
         // Keep the current selection for custom
         setIsOpen(true);
@@ -72,7 +99,9 @@ export function DateRangePicker({
     setSelectedPreset(preset);
     
     if (from && to) {
-      onChange({ from, to });
+      // Pass both the date range and the preset
+      const rangeWithPreset = { from, to, preset };
+      onChange(rangeWithPreset as DateRange);
       
       // Save to localStorage
       localStorage.setItem("dateRangeFilter", JSON.stringify({
@@ -96,7 +125,7 @@ export function DateRangePicker({
           const toDate = new Date(to);
           
           if (isValid(fromDate) && isValid(toDate)) {
-            onChange({ from: fromDate, to: toDate });
+            onChange({ from: fromDate, to: toDate, preset: "custom" } as DateRange);
           }
         } else {
           // Re-apply the preset to ensure dates are current
@@ -113,17 +142,23 @@ export function DateRangePicker({
 
   // Handle custom date selection
   const handleDateRangeChange = (range: DateRange | undefined) => {
-    onChange(range);
     if (range?.from && range?.to) {
+      // Add the preset information
+      const rangeWithPreset = { ...range, preset: "custom" };
+      onChange(rangeWithPreset as DateRange);
+      setSelectedPreset("custom");
+      
       localStorage.setItem("dateRangeFilter", JSON.stringify({
         preset: "custom",
         from: range.from.toISOString(),
         to: range.to.toISOString()
       }));
+    } else {
+      onChange(range);
     }
   };
 
-  return (
+  const picker = (
     <div className={cn("grid gap-2", className)}>
       <div className="flex items-center gap-2">
         <Select value={selectedPreset} onValueChange={handleSelectPreset}>
@@ -131,10 +166,13 @@ export function DateRangePicker({
             <SelectValue placeholder="Select range" />
           </SelectTrigger>
           <SelectContent>
+            <SelectItem value="today">Today</SelectItem>
+            <SelectItem value="yesterday">Yesterday</SelectItem>
             <SelectItem value="this-week">This Week</SelectItem>
             <SelectItem value="last-week">Last Week</SelectItem>
             <SelectItem value="this-month">This Month</SelectItem>
             <SelectItem value="last-month">Last Month</SelectItem>
+            <SelectItem value="last-3-months">Last 3 Months</SelectItem>
             <SelectItem value="custom">Custom Range</SelectItem>
           </SelectContent>
         </Select>
@@ -178,4 +216,19 @@ export function DateRangePicker({
       </div>
     </div>
   );
+
+  if (showCard) {
+    return (
+      <Card className="mb-6">
+        <CardContent className="pt-6">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-medium">{title}</h3>
+            {picker}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return picker;
 }

@@ -31,7 +31,9 @@ function parseClockifyCSV(csvContent: string) {
     // Limit the description to keep uniqueEntryId under 255 chars
     const description = record['Description'] || '';
     const truncatedDescription = description.length > 100 ? description.substring(0, 100) : description;
-    const uniqueEntryId = `${record['User']}-${startDateStr}-${startTime}-${record['Project']}-${truncatedDescription}`.substring(0, 254);
+    // Use email as the unique identifier if available, otherwise fall back to User (for backward compatibility)
+    const userIdentifier = record['Email'] || record['User'];
+    const uniqueEntryId = `${userIdentifier}-${startDateStr}-${startTime}-${record['Project']}-${truncatedDescription}`.substring(0, 254);
     
     return {
       employeeClockifyName: record['User'],
@@ -41,7 +43,6 @@ function parseClockifyCSV(csvContent: string) {
       task: (record['Task'] || '').substring(0, 99),
       group: (record['Group'] || '').substring(0, 99),
       email: (record['Email'] || '').substring(0, 254),
-      tags: (record['Tags'] || '').substring(0, 254),
       startDate,
       startTime,
       endDate,
@@ -112,13 +113,13 @@ export async function POST(request: NextRequest) {
       fileName: file.name,
     }).returning();
 
-    // Get all employees to match with Clockify names
+    // Get all employees to match with email
     const employeesList = await db.select({
       id: employees.id,
-      clockifyName: employees.clockifyName
+      email: employees.email
     }).from(employees);
     const employeeMap = new Map(
-      employeesList.map(emp => [emp.clockifyName, emp])
+      employeesList.map(emp => [emp.email.toLowerCase(), emp])
     );
 
     // Prepare time entries for insertion
@@ -126,10 +127,12 @@ export async function POST(request: NextRequest) {
     const errors = [];
 
     for (const record of timeRecords) {
-      const employee = employeeMap.get(record.employeeClockifyName);
+      // Use email for matching if available, otherwise try to find by name (for backward compatibility)
+      const employeeEmail = record.email ? record.email.toLowerCase() : null;
+      const employee = employeeEmail ? employeeMap.get(employeeEmail) : null;
       
       if (!employee) {
-        errors.push(`Employee "${record.employeeClockifyName}" not found`);
+        errors.push(`Employee with email "${record.email || 'unknown'}" not found`);
         continue;
       }
 
@@ -164,7 +167,6 @@ export async function POST(request: NextRequest) {
         task: record.task,
         group: record.group,
         email: record.email,
-        tags: record.tags,
         startDate: formattedStartDate,
         startTime: record.startTime,
         endDate: formattedEndDate,

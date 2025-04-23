@@ -4,6 +4,10 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 import { DateRange } from "react-day-picker";
 import { startOfWeek, endOfWeek, startOfMonth, endOfMonth } from "date-fns";
 
+interface DateRangeWithPreset extends DateRange {
+  preset?: string;
+}
+
 type DateRangeContextType = {
   dateRange: DateRange | undefined;
   setDateRange: (range: DateRange | undefined) => void;
@@ -56,8 +60,32 @@ export function DateRangeProvider({ children }: { children: React.ReactNode }) {
     }));
   };
 
+  // Custom setter for date range that also extracts preset if available
+  const handleSetDateRange = (range: DateRange | undefined) => {
+    if (range) {
+      // Extract preset if it exists
+      const rangeWithPreset = range as DateRangeWithPreset;
+      if (rangeWithPreset.preset) {
+        setPreset(rangeWithPreset.preset);
+        
+        // Create a clean version of the range without the preset property
+        const { preset: _, ...cleanRange } = rangeWithPreset;
+        setDateRange(cleanRange);
+      } else {
+        setDateRange(range);
+      }
+    } else {
+      setDateRange(undefined);
+    }
+  };
+
   return (
-    <DateRangeContext.Provider value={{ dateRange, setDateRange, preset, setPreset }}>
+    <DateRangeContext.Provider value={{ 
+      dateRange, 
+      setDateRange: handleSetDateRange, 
+      preset, 
+      setPreset 
+    }}>
       {children}
     </DateRangeContext.Provider>
   );

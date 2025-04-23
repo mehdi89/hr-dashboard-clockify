@@ -11,7 +11,6 @@ export const timeEntries = pgTable('time_entries', {
   task: varchar('task', { length: 100 }),
   group: varchar('group', { length: 100 }),
   email: varchar('email', { length: 255 }),
-  tags: varchar('tags', { length: 255 }),
   startDate: date('start_date').notNull(),
   startTime: time('start_time').notNull(),
   endDate: date('end_date').notNull(),
