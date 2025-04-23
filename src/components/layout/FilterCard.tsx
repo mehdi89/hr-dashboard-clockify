@@ -52,7 +52,7 @@ export function FilterCard({
         >
           {children}
           
-          <div className="flex items-end justify-start sm:justify-end mt-2">
+          {/* <div className="flex items-end justify-start sm:justify-end mt-2">
             <Button 
               type="submit" 
               variant="secondary"
@@ -60,7 +60,7 @@ export function FilterCard({
             >
               {submitLabel}
             </Button>
-          </div>
+          </div> */}
         </form>
       </CardContent>
     </Card>

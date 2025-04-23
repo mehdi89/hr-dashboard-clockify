@@ -28,30 +28,66 @@ export type TimeEntryWithEmployee = {
 interface TimeEntriesTableProps {
   entries: TimeEntryWithEmployee[];
   emptyMessage?: string;
+  onDateClick?: (date: string) => void;
+  onEmployeeClick?: (employeeId: number) => void;
+  onProjectClick?: (project: string) => void;
+  onClientClick?: (client: string) => void;
 }
 
 export function TimeEntriesTable({ 
   entries, 
-  emptyMessage = "No time entries found with the current filters." 
+  emptyMessage = "No time entries found with the current filters.",
+  onDateClick,
+  onEmployeeClick,
+  onProjectClick,
+  onClientClick
 }: TimeEntriesTableProps) {
   // Define columns for the DataTable
   const columns = [
     {
       header: "Date",
       accessorKey: "date" as const,
-      cell: (entry: TimeEntryWithEmployee) => format(new Date(entry.date), 'MM/dd/yyyy')
+      cell: (entry: TimeEntryWithEmployee) => (
+        <button 
+          onClick={onDateClick ? () => onDateClick(entry.date) : undefined}
+          className={`text-left ${onDateClick ? 'hover:underline text-primary' : ''}`}
+          disabled={!onDateClick}
+          type="button"
+        >
+          {format(new Date(entry.date), 'MM/dd/yyyy')}
+        </button>
+      ),
+      minWidth: 100
     },
     {
       header: "Employee",
-      accessorKey: "employeeName" as const
+      accessorKey: "employeeName" as const,
+      cell: (entry: TimeEntryWithEmployee) => (
+        <button 
+          onClick={onEmployeeClick ? () => onEmployeeClick(entry.employeeId) : undefined}
+          className={`text-left ${onEmployeeClick ? 'hover:underline text-primary' : ''}`}
+          disabled={!onEmployeeClick}
+          type="button"
+        >
+          {entry.employeeName}
+        </button>
+      ),
+      minWidth: 120
     },
     {
       header: "Project",
-      accessorKey: "project" as const
-    },
-    {
-      header: "Client",
-      cell: (entry: TimeEntryWithEmployee) => entry.client || '-'
+      accessorKey: "project" as const,
+      cell: (entry: TimeEntryWithEmployee) => (
+        <button 
+          onClick={onProjectClick ? () => onProjectClick(entry.project) : undefined}
+          className={`text-left ${onProjectClick ? 'hover:underline text-primary' : ''}`}
+          disabled={!onProjectClick}
+          type="button"
+        >
+          {entry.project}
+        </button>
+      ),
+      minWidth: 120
     },
     {
       header: "Description",
@@ -63,27 +99,29 @@ export function TimeEntriesTable({
             <span className="text-muted-foreground">-</span>
           )}
         </div>
-      )
+      ),
+      minWidth: 150,
+      hideOnMobile: true
     },
+    
     {
-      header: "Task",
-      cell: (entry: TimeEntryWithEmployee) => entry.task || '-'
+      header: "Hours",
+      accessorKey: "hoursWorked" as const,
+      minWidth: 70
     },
     {
       header: "Start",
       cell: (entry: TimeEntryWithEmployee) => (
         `${format(new Date(entry.startDate), 'MM/dd/yyyy')} ${entry.startTime}`
-      )
+      ),
+      hideOnMobile: true
     },
     {
       header: "End",
       cell: (entry: TimeEntryWithEmployee) => (
         `${format(new Date(entry.endDate), 'MM/dd/yyyy')} ${entry.endTime}`
-      )
-    },
-    {
-      header: "Hours",
-      accessorKey: "hoursWorked" as const
+      ),
+      hideOnMobile: true
     },
     {
       header: "Actions",
@@ -94,7 +132,8 @@ export function TimeEntriesTable({
             View
           </Link>
         </Button>
-      )
+      ),
+      minWidth: 100
     }
   ];
 

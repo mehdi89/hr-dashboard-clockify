@@ -17,8 +17,10 @@ import {
   ListTodo,
   Calendar,
   Menu,
-  X
+  X,
+  LogOut
 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { cn } from '@/lib/utils';
 
@@ -30,6 +32,7 @@ interface SidebarProps {
 export function Sidebar({ isMobileOpen, setIsMobileOpen }: SidebarProps) {
   const [reportsOpen, setReportsOpen] = useState(false);
   const pathname = usePathname();
+  const router = useRouter();
 
   const isActive = (path: string) => {
     return pathname === path || pathname?.startsWith(`${path}/`);
@@ -128,6 +131,21 @@ export function Sidebar({ isMobileOpen, setIsMobileOpen }: SidebarProps) {
             <p className="text-xs uppercase text-muted-foreground font-medium mb-2 px-2">Account</p>
             <NavLink href="/settings" icon={Settings} label="Settings" isActive={isActive('/settings')} />
             <NavLink href="/help" icon={HelpCircle} label="Help & Support" isActive={isActive('/help')} />
+            <button
+              onClick={async () => {
+                try {
+                  await fetch('/api/auth/logout', { method: 'POST' });
+                  router.push('/login');
+                  router.refresh();
+                } catch (error) {
+                  console.error('Logout error:', error);
+                }
+              }}
+              className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors w-full text-left hover:bg-accent hover:text-accent-foreground"
+            >
+              <LogOut className="h-4 w-4" />
+              Logout
+            </button>
           </div>
         </nav>
       </aside>

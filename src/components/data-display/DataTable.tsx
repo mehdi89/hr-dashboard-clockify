@@ -76,13 +76,13 @@ export function DataTable<T extends Record<string, any>>({
           <CardTitle>{title}</CardTitle>
         </CardHeader>
       )}
-      <CardContent className="px-2 sm:px-6">
+      <CardContent className="p-0">
         {data.length === 0 ? (
           <div className="text-center py-6 text-muted-foreground">
             {emptyMessage}
           </div>
         ) : (
-          <div className="rounded-md border overflow-hidden overflow-x-auto">
+          <div className="overflow-hidden overflow-x-auto">
             <Table className="w-full table-auto">
               <TableHeader>
                 <TableRow>
