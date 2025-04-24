@@ -1,48 +1,49 @@
 import { db } from '../src/db';
 import { users } from '../src/db/schema/users';
 import { hashPassword } from '../src/lib/auth';
-import { sql } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
+import { config } from 'dotenv';
 
-async function addAdminUser() {
+// Load environment variables
+config();
+
+async function createAdminUser() {
   try {
-    console.log('Adding admin user...');
+    const username = process.env.ADMIN_USERNAME || 'admin';
+    const password = process.env.ADMIN_PASSWORD || 'admin123';
+    const email = process.env.ADMIN_EMAIL || 'admin@example.com';
+    
+    console.log(`Creating admin user: ${username}`);
+    
+    // Hash the password
+    const passwordHash = await hashPassword(password);
     
     // Check if admin user already exists
-    const existingUsers = await db.select().from(users).where(sql`username = 'admin'`).limit(1);
+    const existingUser = await db.select().from(users).where(eq(users.username, username)).limit(1);
     
-    if (existingUsers.length > 0) {
+    if (existingUser.length > 0) {
       console.log('Admin user already exists');
-      
-      // Update the admin user's password
-      const passwordHash = await hashPassword('admin123');
-      await db.update(users)
-        .set({ passwordHash })
-        .where(sql`username = 'admin'`);
-      
-      console.log('Admin user password updated');
-    } else {
-      // Create the admin user
-      const passwordHash = await hashPassword('admin123');
-      await db.insert(users).values({
-        username: 'admin',
-        passwordHash,
-        name: 'Administrator',
-        email: 'admin@example.com',
-        role: 'admin',
-      });
-      
-      console.log('Admin user created successfully');
+      process.exit(0);
     }
     
-    // Verify the user was created/updated
-    const adminUser = await db.select().from(users).where(sql`username = 'admin'`).limit(1);
-    console.log('Admin user:', adminUser[0]);
+    // Create admin user
+    await db.insert(users).values({
+      username,
+      passwordHash,
+      name: 'Administrator',
+      email,
+      role: 'admin',
+    });
     
-    process.exit(0);
+    console.log('Admin user created successfully');
   } catch (error) {
-    console.error('Error adding admin user:', error);
+    console.error('Error creating admin user:', error);
     process.exit(1);
   }
 }
 
-addAdminUser();
+// Run the function
+createAdminUser().catch((error) => {
+  console.error('Failed to create admin user:', error);
+  process.exit(1);
+});

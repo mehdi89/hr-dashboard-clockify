@@ -60,7 +60,7 @@ export async function fetchEmployeeEfficiencyData(
   const daysDiff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
   
   // Calculate weeks in the date range (used for committed hours calculation)
-  const weeks = daysDiff / 7;
+  const weeks = daysDiff / 5;
   
   // Calculate committed hours for the period
   const committedHoursForPeriod = employee.weeklyCommittedHours * weeks;

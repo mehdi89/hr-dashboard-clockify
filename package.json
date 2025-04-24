@@ -15,8 +15,6 @@
     "db:seed": "tsx scripts/seed-data.ts",
     "db:direct-seed": "tsx scripts/direct-seed.ts",
     "db:employee-seed": "tsx scripts/employee-seeder.ts",
-    "db:add-email": "tsx scripts/add-email-column.ts",
-    "db:add-phone": "tsx scripts/add-phone-column.ts",
     "vercel-build": "npm run db:setup && next build"
   },
   "dependencies": {

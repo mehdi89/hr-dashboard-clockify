@@ -61,12 +61,14 @@ A Next.js application for tracking employee working hours using data imported fr
 
 ## Deployment
 
-This application is configured for seamless deployment to Vercel with PostgreSQL support:
+This application is configured for deployment to Vercel with Neon DB PostgreSQL integration:
 
-1. Create a new project in Vercel
-2. Connect your repository
-3. Add the Vercel PostgreSQL integration
-4. Deploy!
+1. See the [DEPLOYMENT.md](./DEPLOYMENT.md) file for detailed instructions on deploying to Vercel with Neon DB
+2. The deployment process includes:
+   - Setting up a Neon DB PostgreSQL database
+   - Configuring environment variables in Vercel
+   - Automatic database migrations during deployment
+   - Creating an admin user for initial access
 
 ## Data Import Format
 
