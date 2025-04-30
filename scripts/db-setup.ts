@@ -2,12 +2,18 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { Pool } from 'pg';
 import { config } from 'dotenv';
+import path from 'path';
 
 // Load environment variables
 config();
 
 async function setup() {
   console.log('Setting up database...');
+  
+  if (!process.env.DATABASE_URL) {
+    console.error('DATABASE_URL environment variable is not set');
+    process.exit(1);
+  }
   
   // Create a PostgreSQL connection pool
   const pool = new Pool({
@@ -21,7 +27,9 @@ async function setup() {
   // Run migrations
   console.log('Running migrations...');
   try {
-    await migrate(db, { migrationsFolder: './src/db/migrations' });
+    const migrationsPath = path.join(process.cwd(), 'src', 'db', 'migrations');
+    console.log('Migrations path:', migrationsPath);
+    await migrate(db, { migrationsFolder: migrationsPath });
     console.log('Migrations completed successfully');
   } catch (error) {
     console.error('Migration failed:', error);

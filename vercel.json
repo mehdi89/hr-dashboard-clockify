@@ -5,11 +5,15 @@
   "framework": "nextjs",
   "regions": ["iad1"],
   "env": {
-    "NODE_ENV": "production"
+    "NODE_ENV": "production",
+    "NEXT_PUBLIC_APP_URL": "${NEXT_PUBLIC_APP_URL}",
+    "DATABASE_URL": "${DATABASE_URL}"
   },
   "build": {
     "env": {
-      "NODE_ENV": "production"
+      "NODE_ENV": "production",
+      "NEXT_PUBLIC_APP_URL": "${NEXT_PUBLIC_APP_URL}",
+      "DATABASE_URL": "${DATABASE_URL}"
     }
   }
 }
