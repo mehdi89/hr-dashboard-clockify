@@ -1,3 +1,3 @@
--- Update time_entries table to use decimal for duration_decimal
+-- Update time_entries table to use decimal for durationDecimal
 ALTER TABLE time_entries
-ALTER COLUMN duration_decimal TYPE DECIMAL(10, 2);
+ALTER COLUMN "durationDecimal" TYPE DECIMAL(10, 2);
