@@ -61,10 +61,13 @@ The project is configured to use a custom build command in `vercel.json`:
 The `vercel-build` script in `package.json` runs:
 
 ```
-"vercel-build": "prisma migrate deploy && next build"
+"vercel-build": "prisma generate && prisma migrate deploy && next build"
 ```
 
-This ensures that database migrations are run before the Next.js build.
+This ensures that:
+1. The Prisma client is generated first
+2. Database migrations are applied 
+3. Next.js build process runs
 
 ### Deployment Steps
 

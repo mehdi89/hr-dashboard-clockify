@@ -1,0 +1,10 @@
+# Ignore all generated files
+src/generated/**/*
+node_modules
+.next
+out
+build
+dist
+
+# Other common build artifacts
+coverage
