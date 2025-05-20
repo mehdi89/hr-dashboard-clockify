@@ -3,9 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Info, CheckCircle, AlertCircle, Clock } from "lucide-react";
 import { ImportForm } from "@/components/forms/ImportForm";
-import { db } from "@/db";
-import { importLogs } from "@/db/schema";
-import { desc } from "drizzle-orm";
+import { prisma } from "@/db";
 import { format } from "date-fns";
 
 export const metadata: Metadata = {
@@ -14,11 +12,12 @@ export const metadata: Metadata = {
 
 export default async function ImportPage() {
   // Get recent imports
-  const recentImports = await db
-    .select()
-    .from(importLogs)
-    .orderBy(desc(importLogs.importDate))
-    .limit(5);
+  const recentImports = await prisma.import_logs.findMany({
+    orderBy: {
+      importDate: 'desc'
+    },
+    take: 5
+  });
 
   return (
     <div className="space-y-8">

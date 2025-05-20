@@ -1,9 +1,7 @@
 import { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { db } from "@/db";
-import { employees, timeEntries } from "@/db/schema";
-import { eq, desc, sql } from "drizzle-orm";
+import { prisma } from "@/db";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { 
@@ -22,85 +20,108 @@ export const metadata: Metadata = {
   title: "Employee Details - Time Tracking System",
 };
 
-export default async function EmployeeDetailPage({ params }: { params: { id: string } }) {
-  // Await params before using its properties
-  const paramsData = await params;
-  const employeeId = parseInt(paramsData.id);
+export default async function EmployeeDetailPage(props: any) {
+  const { params } = props;
+  const employeeId = parseInt(params.id);
   
   if (isNaN(employeeId)) {
     return notFound();
   }
 
   // Fetch employee details
-  const employeeResults = await db
-    .select({
-      id: employees.id,
-      name: employees.name,
-      email: employees.email,
-      phone: employees.phone,
-      department: employees.department,
-      employmentType: employees.employmentType,
-      weeklyCommittedHours: employees.weeklyCommittedHours,
-      startDate: employees.startDate,
-      isActive: employees.isActive,
-      clockifyName: employees.clockifyName
-    })
-    .from(employees)
-    .where(eq(employees.id, employeeId))
-    .limit(1);
-  
-  const employee = employeeResults[0];
+  const employee = await prisma.employees.findUnique({
+    where: {
+      id: employeeId
+    },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      phone: true,
+      department: true,
+      employmentType: true,
+      weeklyCommittedHours: true,
+      startDate: true,
+      isActive: true,
+      clockifyName: true
+    }
+  });
 
   if (!employee) {
     return notFound();
   }
 
   // Fetch recent time entries
-  const recentEntries = await db
-    .select({
-      id: timeEntries.id,
-      date: timeEntries.date,
-      project: timeEntries.project,
-      client: timeEntries.client,
-      description: timeEntries.description,
-      task: timeEntries.task,
-      startDate: timeEntries.startDate,
-      startTime: timeEntries.startTime,
-      endDate: timeEntries.endDate,
-      endTime: timeEntries.endTime,
-      hoursWorked: timeEntries.hoursWorked,
-      durationDecimal: timeEntries.durationDecimal,
-    })
-    .from(timeEntries)
-    .where(eq(timeEntries.employeeId, employeeId))
-    .orderBy(desc(timeEntries.date), desc(timeEntries.startTime))
-    .limit(10);
+  const recentEntries = await prisma.time_entries.findMany({
+    where: {
+      employeeId: employeeId
+    },
+    select: {
+      id: true,
+      date: true,
+      project: true,
+      client: true,
+      description: true,
+      task: true,
+      startDate: true,
+      startTime: true,
+      endDate: true,
+      endTime: true,
+      hoursWorked: true,
+      durationDecimal: true
+    },
+    orderBy: [
+      { date: 'desc' },
+      { startTime: 'desc' }
+    ],
+    take: 10
+  });
+
+  // Define type for project stats
+  type ProjectStat = {
+    project: string;
+    totalHours: number;
+    entriesCount: number;
+  };
 
   // Get project statistics
-  const projectStats = await db
-    .select({
-      project: timeEntries.project,
-      totalHours: sql<number>`SUM(${timeEntries.durationDecimal})`,
-      entriesCount: sql<number>`COUNT(*)`,
-    })
-    .from(timeEntries)
-    .where(eq(timeEntries.employeeId, employeeId))
-    .groupBy(timeEntries.project)
-    .orderBy(desc(sql`SUM(${timeEntries.durationDecimal})`))
-    .limit(5);
+  const projectStats = await prisma.$queryRaw<ProjectStat[]>`
+    SELECT 
+      "project", 
+      SUM("duration_decimal") as "totalHours",
+      COUNT(*) as "entriesCount"
+    FROM 
+      "time_entries"
+    WHERE 
+      "employee_id" = ${employeeId}
+    GROUP BY 
+      "project"
+    ORDER BY 
+      SUM("duration_decimal") DESC
+    LIMIT 5
+  `;
+
+  // Define type for total hours result
+  type TotalHoursResult = {
+    totalHours: number | bigint;
+    entriesCount: number | bigint;
+  };
 
   // Calculate total hours
-  const totalHoursResult = await db
-    .select({
-      totalHours: sql<number>`SUM(${timeEntries.durationDecimal})`,
-      entriesCount: sql<number>`COUNT(*)`,
-    })
-    .from(timeEntries)
-    .where(eq(timeEntries.employeeId, employeeId));
+  const totalHoursResult = await prisma.$queryRaw<TotalHoursResult[]>`
+    SELECT 
+      SUM("duration_decimal") as "totalHours",
+      COUNT(*) as "entriesCount"
+    FROM 
+      "time_entries"
+    WHERE 
+      "employee_id" = ${employeeId}
+  `;
 
-  const totalHours = totalHoursResult[0]?.totalHours || 0;
-  const entriesCount = totalHoursResult[0]?.entriesCount || 0;
-  const avgHoursPerEntry = entriesCount > 0 ? Number(totalHours) / entriesCount : 0;
+  // Convert BigInt values to Numbers for calculations
+  const totalHours = totalHoursResult[0]?.totalHours ? Number(totalHoursResult[0].totalHours) : 0;
+  const entriesCount = totalHoursResult[0]?.entriesCount ? Number(totalHoursResult[0].entriesCount) : 0;
+  const avgHoursPerEntry = entriesCount > 0 ? totalHours / entriesCount : 0;
 
   return (
     <div className="space-y-6">
@@ -159,7 +180,7 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
               </div>
               <div className="flex items-center gap-2">
                 <Clock className="h-4 w-4 text-muted-foreground" />
-                <span>Started: {new Date(employee.startDate).toLocaleDateString()}</span>
+                <span>Started: {employee.startDate ? String(new Date(employee.startDate).toLocaleDateString()) : 'N/A'}</span>
               </div>
             </div>
             
@@ -269,7 +290,7 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
               ) : (
                 recentEntries.map((entry) => (
                   <TableRow key={entry.id}>
-                    <TableCell>{new Date(entry.date).toLocaleDateString()}</TableCell>
+                    <TableCell>{entry.date ? String(new Date(entry.date).toLocaleDateString()) : '-'}</TableCell>
                     <TableCell>{entry.project}</TableCell>
                     <TableCell className="max-w-xs truncate" title={entry.description || undefined}>
                       {entry.description ? (
@@ -279,7 +300,7 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
                       )}
                     </TableCell>
                     <TableCell>{entry.task || "-"}</TableCell>
-                    <TableCell className="text-right">{entry.hoursWorked}</TableCell>
+                    <TableCell className="text-right">{entry.durationDecimal?.toString() || '-'}</TableCell>
                   </TableRow>
                 ))
               )}

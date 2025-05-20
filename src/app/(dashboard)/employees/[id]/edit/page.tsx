@@ -1,14 +1,20 @@
 import { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { db } from "@/db";
-import { employees, EmploymentType } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { prisma } from "@/db";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowLeft, Save, User } from "lucide-react";
+
+// Define an enum for EmploymentType to match Prisma schema
+enum EmploymentType {
+  FULL_TIME = "full_time",
+  PART_TIME = "part_time",
+  CONTRACT = "contract",
+  FREELANCE = "freelance"
+}
 
 export const metadata: Metadata = {
   title: "Edit Employee - Time Tracking System",
@@ -32,50 +38,51 @@ async function updateEmployee(formData: FormData) {
   const startDate = formData.get("startDate") as string;
   const isActive = formData.get("isActive") === "true";
   
-  await db.update(employees)
-    .set({
+  await prisma.employees.update({
+    where: {
+      id: id
+    },
+    data: {
       name,
       email,
       phone,
       department,
       employmentType,
       weeklyCommittedHours,
-      startDate,
+      startDate: new Date(startDate),
       isActive
-    })
-    .where(eq(employees.id, id));
+    }
+  });
   
   redirect(`/employees/${id}`);
 }
 
-export default async function EditEmployeePage({ params }: { params: { id: string } }) {
-  // Await params before using its properties
-  const paramsData = await params;
-  const employeeId = parseInt(paramsData.id);
+export default async function EditEmployeePage(props: any) {
+  const { params } = props;
+  const employeeId = parseInt(params.id);
   
   if (isNaN(employeeId)) {
     return notFound();
   }
 
-  // Fetch employee details
-  const employeeResults = await db
-    .select({
-      id: employees.id,
-      name: employees.name,
-      email: employees.email,
-      phone: employees.phone,
-      department: employees.department,
-      employmentType: employees.employmentType,
-      weeklyCommittedHours: employees.weeklyCommittedHours,
-      startDate: employees.startDate,
-      isActive: employees.isActive,
-      clockifyName: employees.clockifyName
-    })
-    .from(employees)
-    .where(eq(employees.id, employeeId))
-    .limit(1);
-  
-  const employee = employeeResults[0];
+  // Fetch employee details using Prisma
+  const employee = await prisma.employees.findUnique({
+    where: {
+      id: employeeId
+    },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      phone: true,
+      department: true,
+      employmentType: true,
+      weeklyCommittedHours: true,
+      startDate: true,
+      isActive: true,
+      clockifyName: true
+    }
+  });
 
   if (!employee) {
     return notFound();
@@ -226,7 +233,7 @@ export default async function EditEmployeePage({ params }: { params: { id: strin
                   id="startDate" 
                   name="startDate" 
                   type="date" 
-                  defaultValue={employee.startDate} 
+                  defaultValue={employee.startDate ? employee.startDate.toISOString().split('T')[0] : ''} 
                   required 
                 />
               </div>

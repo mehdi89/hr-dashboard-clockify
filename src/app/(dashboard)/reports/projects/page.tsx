@@ -15,7 +15,6 @@ import {
 } from "@/components/ui/table";
 import { ArrowLeft, PieChart } from "lucide-react";
 import { DateRangeProvider, useDateRange } from "@/contexts/DateRangeContext";
-import { DateRangeSelector } from "@/components/DateRangeSelector";
 import { startOfWeek, endOfWeek } from "date-fns";
 import { fetchProjectDistributionData, ProjectDistributionData, EmployeeProjectDistribution } from "./actions";
 import { ProjectDistributionPieChart } from "./_components/ProjectDistributionPieChart";

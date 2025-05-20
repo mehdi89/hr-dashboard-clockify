@@ -25,7 +25,8 @@ export async function login(formData: FormData) {
   
   if (result.success) {
     // Set the auth cookie
-    cookies().set({
+    const cookieStore = await cookies();
+    cookieStore.set({
       name: AUTH_COOKIE_NAME,
       value: result.user.id.toString(),
       httpOnly: true,
@@ -43,7 +44,8 @@ export async function login(formData: FormData) {
  * Logout action
  */
 export async function logout() {
-  cookies().delete(AUTH_COOKIE_NAME);
+  const cookieStore = await cookies();
+  cookieStore.delete(AUTH_COOKIE_NAME);
   redirect('/login');
 }
 
@@ -51,7 +53,7 @@ export async function logout() {
  * Get the current user from the auth cookie
  */
 export async function getCurrentUser() {
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   const authCookie = cookieStore.get(AUTH_COOKIE_NAME);
   
   if (!authCookie) {

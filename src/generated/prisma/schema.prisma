@@ -1,0 +1,88 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum EmploymentType {
+  full_time
+  part_time
+  contract
+  freelance
+}
+
+enum ImportStatus {
+  successful
+  failed
+}
+
+model users {
+  id           Int      @id @default(autoincrement())
+  username     String   @unique
+  passwordHash String   @map("password_hash")
+  name         String?
+  email        String?
+  role         String   @default("user")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @default(now()) @map("updated_at")
+}
+
+model employees {
+  id                   Int            @id @default(autoincrement())
+  name                 String
+  email                String         @unique
+  phone                String?
+  position             String?
+  department           String
+  employmentType       EmploymentType @map("employment_type")
+  weeklyCommittedHours Int            @map("weekly_committed_hours")
+  startDate            DateTime       @map("start_date")
+  joinDate             DateTime?      @map("join_date")
+  isActive             Boolean        @default(true) @map("is_active")
+  clockifyName         String?        @map("clockify_name")
+  bio                  String?
+  avatarUrl            String?        @map("avatar_url")
+  time_entries         time_entries[]
+}
+
+model import_logs {
+  id           Int            @id @default(autoincrement())
+  startDate    DateTime       @map("start_date")
+  endDate      DateTime       @map("end_date")
+  importDate   DateTime       @default(now()) @map("import_date")
+  status       ImportStatus
+  fileName     String         @map("file_name")
+  time_entries time_entries[]
+}
+
+model time_entries {
+  id              Int         @id @default(autoincrement())
+  employeeId      Int         @map("employee_id")
+  date            DateTime
+  project         String
+  client          String?
+  description     String?
+  task            String?
+  group           String?
+  email           String?
+  startDate       DateTime    @map("start_date")
+  startTime       DateTime    @map("start_time")
+  endDate         DateTime    @map("end_date")
+  endTime         DateTime    @map("end_time")
+  hoursWorked     DateTime    @map("hours_worked")
+  durationDecimal Decimal?    @map("duration_decimal")
+  uniqueEntryId   String      @unique @map("unique_entry_id")
+  importBatchId   Int         @map("import_batch_id")
+  employee        employees   @relation(fields: [employeeId], references: [id])
+  import_log      import_logs @relation(fields: [importBatchId], references: [id])
+}

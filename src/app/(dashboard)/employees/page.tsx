@@ -1,7 +1,5 @@
 import { Metadata } from "next";
-import { db } from "@/db";
-import { employees } from "@/db/schema";
-import { desc } from "drizzle-orm";
+import { prisma } from "@/db";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { EmployeesTable, type Employee } from "@/components/data-display/EmployeesTable";
 
@@ -11,19 +9,28 @@ export const metadata: Metadata = {
 
 export default async function EmployeesPage() {
   // Fetch employees from the database
-  const employeesList = await db
-    .select({
-      id: employees.id,
-      name: employees.name,
-      department: employees.department,
-      employmentType: employees.employmentType,
-      weeklyCommittedHours: employees.weeklyCommittedHours,
-      startDate: employees.startDate,
-      isActive: employees.isActive,
-      clockifyName: employees.clockifyName
-    })
-    .from(employees)
-    .orderBy(desc(employees.isActive), employees.name);
+  const employeesData = await prisma.employees.findMany({
+    select: {
+      id: true,
+      name: true,
+      department: true,
+      employmentType: true,
+      weeklyCommittedHours: true,
+      startDate: true,
+      isActive: true,
+      clockifyName: true
+    },
+    orderBy: [
+      { isActive: 'desc' },
+      { name: 'asc' }
+    ]
+  });
+  
+  // Format dates for the Employee type
+  const employeesList = employeesData.map(employee => ({
+    ...employee,
+    startDate: employee.startDate ? employee.startDate.toISOString() : null
+  }));
 
   return (
     <div className="space-y-6">
@@ -37,7 +44,7 @@ export default async function EmployeesPage() {
         }}
       />
 
-      <EmployeesTable employees={employeesList as Employee[]} />
+      <EmployeesTable employees={employeesList} />
     </div>
   );
 }

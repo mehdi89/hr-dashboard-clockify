@@ -1,8 +1,6 @@
 "use server";
 
-import { db } from "@/db";
-import { timeEntries, employees } from "@/db/schema";
-import { desc, sql, eq, and, gte, lte } from "drizzle-orm";
+import { prisma } from "@/db";
 
 export type EmployeeEfficiency = {
   employeeId: number;
@@ -20,39 +18,40 @@ export async function fetchEmployeeEfficiencyData(
   endDate: string
 ): Promise<EmployeeEfficiency | null> {
   // Get employee details
-  const employeeResult = await db
-    .select({
-      id: employees.id,
-      name: employees.name,
-      weeklyCommittedHours: employees.weeklyCommittedHours,
-    })
-    .from(employees)
-    .where(eq(employees.id, employeeId))
-    .limit(1);
+  const employee = await prisma.employees.findUnique({
+    where: {
+      id: employeeId
+    },
+    select: {
+      id: true,
+      name: true,
+      weeklyCommittedHours: true
+    }
+  });
 
-  if (employeeResult.length === 0) {
+  if (!employee) {
     return null;
   }
 
-  const employee = employeeResult[0];
-
   // Get total hours for the date range
-  const timeEntryStats = await db
-    .select({
-      totalHours: sql<number>`SUM(CAST(${timeEntries.durationDecimal} AS DECIMAL))`,
-      entriesCount: sql<number>`COUNT(*)`,
-    })
-    .from(timeEntries)
-    .where(
-      and(
-        eq(timeEntries.employeeId, employeeId),
-        gte(timeEntries.date, startDate),
-        lte(timeEntries.date, endDate)
-      )
-    );
+  const timeEntryStats = await prisma.time_entries.aggregate({
+    _sum: {
+      durationDecimal: true
+    },
+    _count: {
+      id: true
+    },
+    where: {
+      employeeId: employeeId,
+      date: {
+        gte: new Date(startDate),
+        lte: new Date(endDate)
+      }
+    }
+  });
 
-  const totalHours = Number(timeEntryStats[0]?.totalHours || 0);
-  const entriesCount = Number(timeEntryStats[0]?.entriesCount || 0);
+  const totalHours = Number(timeEntryStats._sum.durationDecimal || 0);
+  const entriesCount = Number(timeEntryStats._count.id || 0);
 
   // Calculate days in the date range
   const start = new Date(startDate);
@@ -86,23 +85,20 @@ export async function fetchEmployeeProjectData(
   startDate: string,
   endDate: string
 ) {
-  // Get project statistics for the employee
-  const projectStats = await db
-    .select({
-      project: timeEntries.project,
-      totalHours: sql<number>`SUM(CAST(${timeEntries.durationDecimal} AS DECIMAL))`,
-      entriesCount: sql<number>`COUNT(*)`,
-    })
-    .from(timeEntries)
-    .where(
-      and(
-        eq(timeEntries.employeeId, employeeId),
-        gte(timeEntries.date, startDate),
-        lte(timeEntries.date, endDate)
-      )
-    )
-    .groupBy(timeEntries.project)
-    .orderBy(desc(sql`SUM(CAST(${timeEntries.durationDecimal} AS DECIMAL))`));
+  // Get project statistics for the employee using raw query for groupBy and aggregation
+  const projectStats = await prisma.$queryRaw<Array<{project: string, totalHours: number, entriesCount: number}>>`
+    SELECT 
+      project,
+      SUM(CAST("durationDecimal" AS DECIMAL)) as "totalHours",
+      COUNT(*) as "entriesCount"
+    FROM "time_entries"
+    WHERE 
+      "employeeId" = ${employeeId} AND
+      date >= ${new Date(startDate)} AND 
+      date <= ${new Date(endDate)}
+    GROUP BY project
+    ORDER BY SUM(CAST("durationDecimal" AS DECIMAL)) DESC
+  `;
 
   return projectStats;
 }

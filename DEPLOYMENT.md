@@ -1,130 +1,99 @@
-# Deploying to Vercel with Neon DB PostgreSQL
+# Deployment Guide
 
-This guide provides step-by-step instructions for deploying the Time Tracking System to Vercel with Neon DB PostgreSQL integration.
+This document provides guidance for deploying the TubeOnAI Timetable application to Vercel.
 
 ## Prerequisites
 
-- A [Vercel](https://vercel.com) account
-- A [Neon DB](https://neon.tech) account
-- A GitHub repository with your project code
+- A Vercel account
+- A PostgreSQL database (e.g., Neon, Supabase, etc.)
+- Git repository with your project code
 
-## Step 1: Set Up Neon DB
+## Environment Setup
 
-1. **Create a Neon DB Account**
-   - Sign up at [neon.tech](https://neon.tech)
-   - Verify your email and complete account setup
+### Database Configuration
 
-2. **Create a PostgreSQL Database**
-   - From the Neon dashboard, create a new project
-   - Name it "timetable" (to match the current database name)
-   - Select the region closest to your target users
-   - Choose the appropriate plan (they offer a free tier for development)
+1. Create a PostgreSQL database with a provider of your choice. We recommend [Neon](https://neon.tech/) for serverless PostgreSQL.
 
-3. **Get Connection Details**
-   - Once created, navigate to the "Connection Details" section
-   - Save the connection string which will look like:
-     ```
-     postgres://[user]:[password]@[endpoint]/timetable
-     ```
-   - You'll need this for the Vercel environment variables
+2. Update the `.env` file with your database connection details:
 
-## Step 2: Deploy to Vercel
+```
+DATABASE_URL=postgresql://user:password@hostname/database?sslmode=require
+POSTGRES_PRISMA_URL=postgresql://user:password@hostname/database?sslmode=require
+POSTGRES_URL_NON_POOLING=postgresql://user:password@hostname/database?sslmode=require
+```
 
-1. **Connect GitHub Repository**
-   - Push your code to GitHub if not already done
-   - Log in to [Vercel](https://vercel.com)
-   - Click "Add New" → "Project"
-   - Import your GitHub repository
+3. The `.env` file is excluded from git via `.gitignore`. Use `.env.example` as a template.
 
-2. **Configure Project Settings**
-   - Framework Preset: Next.js
-   - Build Command: Use the default (it will use the vercel-build script from package.json)
-   - Output Directory: Leave as default
-   - Install Command: `npm install`
+### Local Testing
 
-3. **Set Environment Variables**
-   - Add the following environment variables in Vercel project settings:
-     ```
-     DATABASE_URL=postgres://[user]:[password]@[endpoint]/timetable
-     POSTGRES_PRISMA_URL=postgres://[user]:[password]@[endpoint]/timetable?pgbouncer=true&connect_timeout=15
-     POSTGRES_URL_NON_POOLING=postgres://[user]:[password]@[endpoint]/timetable?connect_timeout=15
-     SESSION_SECRET=[generate-a-secure-random-string]
-     ADMIN_USERNAME=admin
-     ADMIN_PASSWORD=[secure-password]
-     ADMIN_EMAIL=admin@example.com
-     NODE_ENV=production
-     ```
-   - For `SESSION_SECRET`, generate a secure random string (at least 32 characters) to encrypt session cookies
-   - Replace all placeholders with your actual values
+Before deploying, test your database connection locally:
 
-4. **Deploy**
-   - Click "Deploy"
-   - Vercel will build and deploy your application
-   - The build process will automatically run database migrations
+```bash
+npx prisma validate
+npx prisma migrate deploy
+```
 
-## Step 3: Verify Deployment
-
-1. **Check Deployment Status**
-   - Monitor the deployment logs in Vercel
-   - Verify that migrations ran successfully
-
-2. **Test the Application**
-   - Visit your deployed application URL
-   - Log in with the admin credentials you set in the environment variables
-   - Test key functionality:
-     - Dashboard loading
-     - Employee management
-     - Time entry viewing
-     - Report generation
-
-3. **Monitor Database**
-   - Check the Neon DB dashboard for active connections
-   - Monitor query performance and adjust as needed
-
-## Troubleshooting
-
-### Database Connection Issues
-- Verify the DATABASE_URL environment variable is correct
-- Ensure SSL is properly configured in the database connection
-- Check Neon DB dashboard for connection limits or issues
-
-### Migration Failures
-- Review migration logs in Vercel deployment
-- If automatic migration fails, you can run migrations manually:
-  ```
-  npx tsx scripts/db-setup.ts
-  ```
-
-### Authentication Issues
-- Verify SESSION_SECRET is set correctly
-- Check cookie settings in session configuration
-- Ensure middleware is properly configured
-
-## Additional Configuration
-
-### Custom Domain
-1. Go to your Vercel project settings
-2. Navigate to the "Domains" section
-3. Add your custom domain and follow the verification steps
-
-### Continuous Deployment
-- Vercel automatically deploys when you push to the main branch
-- You can configure branch deployments in the Vercel project settings
+## Vercel Deployment
 
 ### Environment Variables
-- You can update environment variables in the Vercel project settings
-- After updating environment variables, redeploy your application
 
-## Maintenance
+1. Add the following environment variables in your Vercel project settings:
 
-### Database Backups
-- Set up regular database backups in Neon DB
-- Implement a disaster recovery plan
+   - `DATABASE_URL`: Your PostgreSQL connection string
+   - `POSTGRES_PRISMA_URL`: Same as DATABASE_URL, may include pooling parameters
+   - `POSTGRES_URL_NON_POOLING`: Non-pooled connection for migrations
+   - `SESSION_SECRET`: A secure random string (at least 32 characters)
+   - `ADMIN_USERNAME`: Default admin username
+   - `ADMIN_PASSWORD`: Default admin password
+   - `ADMIN_EMAIL`: Default admin email
+   - `NODE_ENV`: Set to "production"
 
-### Monitoring
-- Set up logging and monitoring for both Vercel and Neon DB
-- Consider implementing error tracking with a service like Sentry
+### Build Configuration
 
-### Performance Optimization
-- Neon DB offers auto-scaling capabilities; monitor usage and adjust as needed
-- Use Vercel's Edge Network for optimal global performance
+The project is configured to use a custom build command in `vercel.json`:
+
+```json
+{
+  "buildCommand": "npm run vercel-build"
+}
+```
+
+The `vercel-build` script in `package.json` runs:
+
+```
+"vercel-build": "prisma migrate deploy && next build"
+```
+
+This ensures that database migrations are run before the Next.js build.
+
+### Deployment Steps
+
+1. Connect your Git repository to Vercel
+2. Configure environment variables as mentioned above
+3. Deploy your application
+4. Vercel will automatically run the build command, including migrations
+
+### Troubleshooting
+
+If you encounter database-related errors:
+
+1. Verify your connection strings are correctly configured in Vercel's environment variables
+2. Check that your database allows connections from Vercel's IP addresses (if using IP restrictions)
+3. Review the logs at `https://vercel.com/[your-username]/[your-project]/deployments`
+
+## Database Migrations
+
+When you make schema changes:
+
+1. Create migrations: `npx prisma migrate dev --name your_migration_name`
+2. Push migrations to your repository
+3. Vercel will automatically apply migrations during deployment
+
+## Seed Data (Optional)
+
+To seed your database with initial data:
+
+1. Create or update the seed script in `scripts/db-seed.ts`
+2. Run manually: `npm run db:seed`
+
+Note: By default, seed scripts don't run automatically during deployment. Consider creating an admin user setup script if needed.

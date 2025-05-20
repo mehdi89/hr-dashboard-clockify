@@ -1,7 +1,5 @@
 import bcrypt from 'bcryptjs';
-import { db } from '@/db';
-import { users } from '@/db/schema';
-import { eq } from 'drizzle-orm';
+import { prisma } from '@/db';
 
 // Salt rounds for bcrypt
 const SALT_ROUNDS = 10;
@@ -20,8 +18,20 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
   return bcrypt.compare(password, hash);
 }
 
+// Define the user type for our application
+export type User = {
+  id: number;
+  username: string;
+  passwordHash: string;
+  name: string | null;
+  email: string | null;
+  role: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 // Define the user type without password hash
-export type UserWithoutPassword = Omit<typeof users.$inferSelect, 'passwordHash'>;
+export type UserWithoutPassword = Omit<User, 'passwordHash'>;
 
 // Define the authentication result type
 export type AuthResult = 
@@ -34,13 +44,13 @@ export type AuthResult =
 export async function authenticateUser(username: string, password: string): Promise<AuthResult> {
   try {
     // Find the user by username
-    const userResults = await db.select().from(users).where(eq(users.username, username)).limit(1);
+    const user = await prisma.users.findUnique({
+      where: { username }
+    });
     
-    if (userResults.length === 0) {
+    if (!user) {
       return { success: false, message: 'Invalid username or password' };
     }
-
-    const user = userResults[0];
     
     // Verify the password
     const isPasswordValid = await verifyPassword(password, user.passwordHash);
@@ -66,13 +76,15 @@ export async function authenticateUser(username: string, password: string): Prom
  */
 export async function getUserById(userId: number) {
   try {
-    const userResults = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+    const user = await prisma.users.findUnique({
+      where: { id: userId }
+    });
     
-    if (userResults.length === 0) {
+    if (!user) {
       return null;
     }
     
-    const { passwordHash, ...userData } = userResults[0];
+    const { passwordHash, ...userData } = user;
     return userData;
   } catch (error) {
     console.error('Error getting user by ID:', error);

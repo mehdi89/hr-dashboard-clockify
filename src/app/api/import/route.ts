@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/db';
-import { importLogs, ImportStatus, timeEntries, employees } from '@/db/schema';
-import { desc, eq, sql } from 'drizzle-orm';
+import { prisma } from '@/db';
 import { parse } from 'csv-parse/sync';
+
+// Define enum to match Prisma schema
+enum ImportStatus {
+  successful = 'successful',
+  failed = 'failed'
+}
 
 // Helper function to parse the CSV data
 function parseClockifyCSV(csvContent: string) {
@@ -106,20 +110,30 @@ export async function POST(request: NextRequest) {
     const endDate = maxDate.toISOString().split('T')[0];
 
     // Create a new import log
-    const [importLog] = await db.insert(importLogs).values({
-      startDate: new Date(startDate).toISOString().split('T')[0],
-      endDate: new Date(endDate).toISOString().split('T')[0],
-      status: ImportStatus.SUCCESS,
-      fileName: file.name,
-    }).returning();
+    const importLog = await prisma.import_logs.create({
+      data: {
+        startDate: new Date(startDate),
+        endDate: new Date(endDate),
+        status: ImportStatus.successful,
+        fileName: file.name,
+      }
+    });
 
     // Get all employees to match with email
-    const employeesList = await db.select({
-      id: employees.id,
-      email: employees.email
-    }).from(employees);
-    const employeeMap = new Map(
-      employeesList.map(emp => [emp.email.toLowerCase(), emp])
+    const employeesList = await prisma.employees.findMany({
+      select: {
+        id: true,
+        email: true
+      }
+    });
+    // Create a type for the employee data
+    type EmployeeData = {
+      id: number;
+      email: string;
+    };
+    
+    const employeeMap = new Map<string, EmployeeData>(
+      employeesList.map((emp: EmployeeData) => [emp.email.toLowerCase(), emp])
     );
 
     // Prepare time entries for insertion
@@ -129,7 +143,7 @@ export async function POST(request: NextRequest) {
     for (const record of timeRecords) {
       // Use email for matching if available, otherwise try to find by name (for backward compatibility)
       const employeeEmail = record.email ? record.email.toLowerCase() : null;
-      const employee = employeeEmail ? employeeMap.get(employeeEmail) : null;
+      const employee: EmployeeData | undefined = employeeEmail ? employeeMap.get(employeeEmail) : undefined;
       
       if (!employee) {
         errors.push(`Employee with email "${record.email || 'unknown'}" not found`);
@@ -186,9 +200,28 @@ export async function POST(request: NextRequest) {
       // Process entries one by one to handle duplicates
       for (const entry of timeEntriesToInsert) {
         try {
-          // Try to insert the entry
-          await db.insert(timeEntries).values(entry);
-          insertedCount++;
+      // Try to insert the entry
+      await prisma.time_entries.create({
+        data: {
+          employeeId: entry.employeeId,
+          date: new Date(entry.date),
+          project: entry.project,
+          client: entry.client,
+          description: entry.description,
+          task: entry.task,
+          group: entry.group,
+          email: entry.email,
+          startDate: new Date(entry.startDate),
+          startTime: new Date(`1970-01-01T${entry.startTime}`),
+          endDate: new Date(entry.endDate),
+          endTime: new Date(`1970-01-01T${entry.endTime}`),
+          hoursWorked: new Date(`1970-01-01T${entry.hoursWorked}`),
+          durationDecimal: parseFloat(entry.durationDecimal),
+          uniqueEntryId: entry.uniqueEntryId,
+          importBatchId: entry.importBatchId,
+        }
+      });
+      insertedCount++;
         } catch (error: any) {
           // If it's a duplicate key error, just skip it
           if (error.code === '23505' && error.constraint === 'time_entries_unique_entry_id_unique') {
@@ -208,10 +241,10 @@ export async function POST(request: NextRequest) {
 
     // Update import log status if there were errors
     if (errors.length > 0 && timeEntriesToInsert.length === 0) {
-      await db
-        .update(importLogs)
-        .set({ status: ImportStatus.FAILED })
-        .where(eq(importLogs.id, importLog.id));
+      await prisma.import_logs.update({
+        where: { id: importLog.id },
+        data: { status: ImportStatus.failed }
+      });
       
       return NextResponse.json(
         { error: 'Import failed', details: errors },

@@ -1,6 +1,5 @@
-import { IronSessionOptions } from 'iron-session';
+import { getIronSession, SessionOptions } from 'iron-session';
 import { cookies } from 'next/headers';
-import { getIronSession } from 'iron-session';
 
 // Define the session data structure
 export interface SessionData {
@@ -9,7 +8,7 @@ export interface SessionData {
 }
 
 // Iron session configuration
-export const sessionOptions: IronSessionOptions = {
+export const sessionOptions: SessionOptions = {
   password: process.env.SESSION_SECRET || 'complex_password_at_least_32_characters_long',
   cookieName: 'timetable_auth_session',
   cookieOptions: {
@@ -22,7 +21,8 @@ export const sessionOptions: IronSessionOptions = {
 
 // Get the session from the request
 export async function getSession() {
-  const session = await getIronSession<SessionData>(cookies(), sessionOptions);
+  const cookieStore = await cookies();
+  const session = await getIronSession<SessionData>(cookieStore, sessionOptions);
   
   // Initialize the session if it's new
   if (!session.isLoggedIn) {

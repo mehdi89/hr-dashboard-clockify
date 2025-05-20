@@ -133,7 +133,7 @@ function EfficiencyReportContent() {
   );
 }
 
-export default async function EfficiencyReportPage() {
+export default function EfficiencyReportPage() {
   return (
     <DateRangeProvider>
       <div className="space-y-6">

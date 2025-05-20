@@ -12,7 +12,7 @@ A Next.js application for tracking employee working hours using data imported fr
 ## Tech Stack
 
 - **Frontend**: Next.js 15 with App Router, React 19, Tailwind CSS
-- **Database**: PostgreSQL with Drizzle ORM
+- **Database**: PostgreSQL with Prisma ORM
 - **Deployment**: Optimized for Vercel deployment
 
 ## Local Development
@@ -36,14 +36,14 @@ A Next.js application for tracking employee working hours using data imported fr
    DATABASE_URL=postgres://postgres:postgres@localhost:5432/timetable
    ```
 
-4. Generate database migrations:
+4. Generate Prisma client:
    ```bash
-   npm run db:generate
+   npx prisma generate
    ```
 
 5. Run database migrations:
    ```bash
-   npm run db:migrate
+   npx prisma migrate dev
    ```
 
 6. Start the development server:
@@ -53,11 +53,24 @@ A Next.js application for tracking employee working hours using data imported fr
 
 7. Open [http://localhost:3000](http://localhost:3000) in your browser
 
+## Migrate reset
+   ```bash 
+   npx prisma migrate reset --force
+   ```
+
+## DB seed 
+   ```bash 
+   npx tsx scripts/db-seed.ts
+   ```
+   
 ## Database Schema
+
+The database schema is defined in the Prisma schema file (`prisma/schema.prisma`):
 
 - **employees**: Employee information including department and employment type
 - **time_entries**: Time tracking records imported from Clockify
 - **import_logs**: Records of CSV imports including status and summary information
+- **users**: User accounts for authentication and system access
 
 ## Deployment
 

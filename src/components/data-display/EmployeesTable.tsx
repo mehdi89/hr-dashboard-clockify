@@ -6,7 +6,7 @@ import { DataTable } from "@/components/data-display/DataTable";
 import { StatusBadge } from "@/components/data-display/StatusBadge";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { Pencil } from "lucide-react";
+import { Pencil, User } from "lucide-react";
 
 // Define the employee type
 export type Employee = {
@@ -68,8 +68,8 @@ export function EmployeesTable({
       cell: (employee: Employee) => (
         <Button variant="ghost" size="sm" asChild>
           <Link href={`/employees/${employee.id}`} className="flex items-center">
-            <Pencil className="mr-2 h-4 w-4" />
-            Edit
+            <User className="mr-2 h-4 w-4" />
+            Profile
           </Link>
         </Button>
       )

@@ -106,21 +106,39 @@ export function TimeEntriesTable({
     
     {
       header: "Hours",
-      accessorKey: "hoursWorked" as const,
+      cell: (entry: TimeEntryWithEmployee) => (
+        entry.durationDecimal ? 
+          `${Number(entry.durationDecimal).toFixed(2)}` : 
+          "-"
+      ),
       minWidth: 70
     },
     {
       header: "Start",
-      cell: (entry: TimeEntryWithEmployee) => (
-        `${format(new Date(entry.startDate), 'MM/dd/yyyy')} ${entry.startTime}`
-      ),
+      cell: (entry: TimeEntryWithEmployee) => {
+        if (!entry.startTime) return "-";
+        try {
+          const startTimeDate = new Date(entry.startTime);
+          return format(startTimeDate, 'HH:mm');
+        } catch (error) {
+          console.error("Error formatting start time:", error);
+          return "-";
+        }
+      },
       hideOnMobile: true
     },
     {
       header: "End",
-      cell: (entry: TimeEntryWithEmployee) => (
-        `${format(new Date(entry.endDate), 'MM/dd/yyyy')} ${entry.endTime}`
-      ),
+      cell: (entry: TimeEntryWithEmployee) => {
+        if (!entry.endTime) return "-";
+        try {
+          const endTimeDate = new Date(entry.endTime);
+          return format(endTimeDate, 'HH:mm');
+        } catch (error) {
+          console.error("Error formatting end time:", error);
+          return "-";
+        }
+      },
       hideOnMobile: true
     },
     {

@@ -1,8 +1,6 @@
 "use server";
 
-import { db } from "@/db";
-import { timeEntries, employees, importLogs } from "@/db/schema";
-import { desc, sql, eq, and, gte, lte, count } from "drizzle-orm";
+import { prisma } from "@/db";
 import { format } from "date-fns";
 
 export type TeamHealthMetrics = {
@@ -83,53 +81,76 @@ export async function fetchDashboardData(startDate: string, endDate: string): Pr
   const currentPeriodDays = Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1;
   
   // Get employee count
-  const employeeCountResult = await db
-    .select({
-      total: count(),
-      active: sql`SUM(CASE WHEN ${employees.isActive} = true THEN 1 ELSE 0 END)`,
-    })
-    .from(employees);
-  
-  const totalEmployees = Number(employeeCountResult[0]?.total || 0);
-  const activeEmployees = Number(employeeCountResult[0]?.active || 0);
+  const totalEmployees = await prisma.employees.count();
+  const activeEmployees = await prisma.employees.count({
+    where: {
+      isActive: true
+    }
+  });
   
   // Get total hours and committed hours
-  const hoursResult = await db
-    .select({
-      totalHours: sql<number>`SUM(CAST(${timeEntries.durationDecimal} AS FLOAT))`,
-    })
-    .from(timeEntries)
-    .where(
-      and(
-        gte(timeEntries.date, startDate),
-        lte(timeEntries.date, endDate)
-      )
-    );
+  const hoursResult = await prisma.time_entries.aggregate({
+    _sum: {
+      durationDecimal: true
+    },
+    where: {
+      date: {
+        gte: new Date(startDate),
+        lte: new Date(endDate)
+      }
+    }
+  });
   
-  const totalHours = Number(hoursResult[0]?.totalHours || 0);
+  const totalHours = Number(hoursResult._sum.durationDecimal || 0);
   
   // Get employee data with actual hours and committed hours
-  const employeeData = await db
-    .select({
-      id: employees.id,
-      name: employees.name,
-      department: employees.department,
-      weeklyCommittedHours: employees.weeklyCommittedHours,
-      isActive: employees.isActive,
-      actualHours: sql<number>`COALESCE(SUM(CAST(${timeEntries.durationDecimal} AS FLOAT)), 0)`,
-      daysWorked: sql<number>`COUNT(DISTINCT ${timeEntries.date})`,
-    })
-    .from(employees)
-    .leftJoin(
-      timeEntries,
-      and(
-        eq(employees.id, timeEntries.employeeId),
-        gte(timeEntries.date, startDate),
-        lte(timeEntries.date, endDate)
-      )
-    )
-    .where(eq(employees.isActive, true))
-    .groupBy(employees.id, employees.name, employees.department, employees.weeklyCommittedHours, employees.isActive);
+  const employeeData = await prisma.employees.findMany({
+    where: {
+      isActive: true
+    },
+    select: {
+      id: true,
+      name: true,
+      department: true,
+      weeklyCommittedHours: true,
+      isActive: true,
+      time_entries: {
+        where: {
+          date: {
+            gte: new Date(startDate),
+            lte: new Date(endDate)
+          }
+        },
+        select: {
+          durationDecimal: true,
+          date: true
+        }
+      }
+    }
+  });
+
+  // Process the employee data to calculate hours and days worked
+  const processedEmployeeData = employeeData.map((employee: any) => {
+    const actualHours = employee.time_entries.reduce(
+      (sum: number, entry: any) => sum + Number(entry.durationDecimal || 0), 
+      0
+    );
+    
+    // Count unique days worked
+    const uniqueDates = new Set(
+      employee.time_entries.map((entry: any) => entry.date.toISOString().split('T')[0])
+    );
+    
+    return {
+      id: employee.id,
+      name: employee.name,
+      department: employee.department,
+      weeklyCommittedHours: employee.weeklyCommittedHours,
+      isActive: employee.isActive,
+      actualHours,
+      daysWorked: uniqueDates.size
+    };
+  });
   
   // Calculate weeks in the date range
   const start = new Date(startDate);
@@ -140,7 +161,7 @@ export async function fetchDashboardData(startDate: string, endDate: string): Pr
   // Calculate total committed hours and efficiency
   let totalCommittedHours = 0;
   
-  const employeeEfficiencyData = employeeData.map(employee => {
+  const employeeEfficiencyData = processedEmployeeData.map((employee: any) => {
     const committedHoursForPeriod = employee.weeklyCommittedHours * weeks;
     totalCommittedHours += committedHoursForPeriod;
     
@@ -170,24 +191,20 @@ export async function fetchDashboardData(startDate: string, endDate: string): Pr
     : 100;
   
   // Get daily hours for each employee to calculate consistency
-  const employeeDailyHours = await db
-    .select({
-      employeeId: timeEntries.employeeId,
-      date: timeEntries.date,
-      totalHours: sql<number>`SUM(CAST(${timeEntries.durationDecimal} AS DECIMAL))`,
-    })
-    .from(timeEntries)
-    .where(
-      and(
-        gte(timeEntries.date, startDate),
-        lte(timeEntries.date, endDate)
-      )
-    )
-    .groupBy(timeEntries.employeeId, timeEntries.date);
+  // Group by employee ID and date to get total hours for each employee per day
+  const employeeDailyHours = await prisma.$queryRaw<Array<{employeeId: number, date: Date, totalHours: number}>>`
+    SELECT 
+      "employee_id" AS "employeeId", 
+      date,
+      SUM(CAST("duration_decimal" AS DECIMAL)) AS "totalHours"
+    FROM "time_entries"
+    WHERE date >= ${new Date(startDate)} AND date <= ${new Date(endDate)}
+    GROUP BY "employee_id", date
+  `;
 
   // Calculate consistency (standard deviation of hours worked per day)
   const employeeHoursMap = new Map<number, number[]>();
-  employeeDailyHours.forEach(entry => {
+  employeeDailyHours.forEach((entry: any) => {
     if (!employeeHoursMap.has(entry.employeeId)) {
       employeeHoursMap.set(entry.employeeId, []);
     }
@@ -195,12 +212,12 @@ export async function fetchDashboardData(startDate: string, endDate: string): Pr
   });
 
   // Update consistency scores
-  employeeEfficiencyData.forEach(employee => {
+  employeeEfficiencyData.forEach((employee: any) => {
     const hoursArray = employeeHoursMap.get(employee.employeeId) || [];
     if (hoursArray.length > 0) {
-      const mean = hoursArray.reduce((sum, val) => sum + val, 0) / hoursArray.length;
-      const squareDiffs = hoursArray.map(val => Math.pow(val - mean, 2));
-      const avgSquareDiff = squareDiffs.reduce((sum, val) => sum + val, 0) / squareDiffs.length;
+      const mean = hoursArray.reduce((sum: number, val: number) => sum + val, 0) / hoursArray.length;
+      const squareDiffs = hoursArray.map((val: number) => Math.pow(val - mean, 2));
+      const avgSquareDiff = squareDiffs.reduce((sum: number, val: number) => sum + val, 0) / squareDiffs.length;
       const stdDev = Math.sqrt(avgSquareDiff);
       
       // Normalize consistency to a 0-100 scale (lower std dev = higher consistency)
@@ -209,25 +226,20 @@ export async function fetchDashboardData(startDate: string, endDate: string): Pr
   });
   
   // Get project allocation data
-  const projectAllocation = await db
-    .select({
-      project: timeEntries.project,
-      totalHours: sql<number>`SUM(CAST(${timeEntries.durationDecimal} AS DECIMAL))`,
-      employeesCount: sql<number>`COUNT(DISTINCT ${timeEntries.employeeId})`,
-      department: sql<string>`MAX(${employees.department})`,
-    })
-    .from(timeEntries)
-    .leftJoin(employees, eq(timeEntries.employeeId, employees.id))
-    .where(
-      and(
-        gte(timeEntries.date, startDate),
-        lte(timeEntries.date, endDate)
-      )
-    )
-    .groupBy(timeEntries.project)
-    .orderBy(desc(sql`SUM(CAST(${timeEntries.durationDecimal} AS DECIMAL))`));
+  const projectAllocation = await prisma.$queryRaw<Array<{project: string, totalHours: number, employeesCount: number, department: string}>>`
+    SELECT 
+      "time_entries"."project",
+      SUM(CAST("duration_decimal" AS DECIMAL)) AS "totalHours",
+      COUNT(DISTINCT "employee_id") AS "employeesCount",
+      MAX("employees"."department") AS "department"
+    FROM "time_entries"
+    LEFT JOIN "employees" ON "time_entries"."employee_id" = "employees"."id"
+    WHERE "time_entries"."date" >= ${new Date(startDate)} AND "time_entries"."date" <= ${new Date(endDate)}
+    GROUP BY "time_entries"."project"
+    ORDER BY SUM(CAST("duration_decimal" AS DECIMAL)) DESC
+  `;
   
-  const projectAllocationData = projectAllocation.map(project => ({
+  const projectAllocationData = projectAllocation.map((project: any) => ({
     project: project.project,
     totalHours: Number(project.totalHours),
     employeesCount: Number(project.employeesCount),
@@ -236,24 +248,19 @@ export async function fetchDashboardData(startDate: string, endDate: string): Pr
   }));
   
   // Calculate weekend work percentage
-  const dailyDistribution = await db
-    .select({
-      date: timeEntries.date,
-      totalHours: sql<number>`SUM(CAST(${timeEntries.durationDecimal} AS DECIMAL))`,
-      dayOfWeek: sql<number>`EXTRACT(DOW FROM ${timeEntries.date})`,
-    })
-    .from(timeEntries)
-    .where(
-      and(
-        gte(timeEntries.date, startDate),
-        lte(timeEntries.date, endDate)
-      )
-    )
-    .groupBy(timeEntries.date, sql`EXTRACT(DOW FROM ${timeEntries.date})`)
-    .orderBy(timeEntries.date);
+  const dailyDistribution = await prisma.$queryRaw<Array<{date: Date, totalHours: number, dayOfWeek: number}>>`
+    SELECT 
+      date, 
+      SUM(CAST("duration_decimal" AS DECIMAL)) AS "totalHours",
+      EXTRACT(DOW FROM date) AS "dayOfWeek"
+    FROM "time_entries"
+    WHERE date >= ${new Date(startDate)} AND date <= ${new Date(endDate)}
+    GROUP BY date, EXTRACT(DOW FROM date)
+    ORDER BY date
+  `;
   
   let weekendHours = 0;
-  dailyDistribution.forEach(day => {
+  dailyDistribution.forEach((day: any) => {
     // PostgreSQL DOW: 0 = Sunday, 6 = Saturday
     if (day.dayOfWeek === 0 || day.dayOfWeek === 6) {
       weekendHours += Number(day.totalHours);
@@ -263,20 +270,15 @@ export async function fetchDashboardData(startDate: string, endDate: string): Pr
   const weekendWorkPercentage = totalHours > 0 ? (weekendHours / totalHours) * 100 : 0;
   
   // Calculate work hour distribution (early, core, late, night hours)
-  const hourDistribution = await db
-    .select({
-      hour: sql<number>`EXTRACT(HOUR FROM ${timeEntries.startTime})`,
-      totalHours: sql<number>`SUM(CAST(${timeEntries.durationDecimal} AS DECIMAL))`,
-    })
-    .from(timeEntries)
-    .where(
-      and(
-        gte(timeEntries.date, startDate),
-        lte(timeEntries.date, endDate)
-      )
-    )
-    .groupBy(sql`EXTRACT(HOUR FROM ${timeEntries.startTime})`)
-    .orderBy(sql`EXTRACT(HOUR FROM ${timeEntries.startTime})`);
+  const hourDistribution = await prisma.$queryRaw<Array<{hour: number, totalHours: number}>>`
+    SELECT 
+      EXTRACT(HOUR FROM "start_time") AS "hour",
+      SUM(CAST("duration_decimal" AS DECIMAL)) AS "totalHours"
+    FROM "time_entries"
+    WHERE date >= ${new Date(startDate)} AND date <= ${new Date(endDate)}
+    GROUP BY EXTRACT(HOUR FROM "start_time")
+    ORDER BY EXTRACT(HOUR FROM "start_time")
+  `;
   
   let earlyHours = 0;   // 5-9 AM
   let coreHours = 0;    // 9-5 PM
@@ -284,7 +286,7 @@ export async function fetchDashboardData(startDate: string, endDate: string): Pr
   let nightHours = 0;   // 11PM-5AM
   let afterHours = 0;   // Outside 9-5
   
-  hourDistribution.forEach(entry => {
+  hourDistribution.forEach((entry: any) => {
     const hour = Number(entry.hour);
     const hours = Number(entry.totalHours);
     
@@ -305,14 +307,16 @@ export async function fetchDashboardData(startDate: string, endDate: string): Pr
   const afterHoursPercentage = totalHours > 0 ? (afterHours / totalHours) * 100 : 0;
   
   // Get latest import
-  const latestImport = await db
-    .select({
-      importDate: importLogs.importDate,
-      fileName: importLogs.fileName,
-    })
-    .from(importLogs)
-    .orderBy(desc(importLogs.importDate))
-    .limit(1);
+  const latestImport = await prisma.import_logs.findMany({
+    select: {
+      importDate: true,
+      fileName: true
+    },
+    orderBy: {
+      importDate: 'desc'
+    },
+    take: 1
+  });
   
   const latestImportDate = latestImport[0]?.importDate 
     ? format(new Date(latestImport[0].importDate), 'MM/dd/yyyy')
@@ -320,37 +324,41 @@ export async function fetchDashboardData(startDate: string, endDate: string): Pr
   
   // Count entries imported on the latest import date
   const latestImportCount = latestImport[0]?.importDate 
-    ? await db
-        .select({
-          count: count(),
-        })
-        .from(timeEntries)
-        .where(eq(timeEntries.date, format(new Date(latestImport[0].importDate), 'yyyy-MM-dd')))
-        .then(result => Number(result[0]?.count || 0))
+    ? await prisma.time_entries.count({
+        where: {
+          date: new Date(format(new Date(latestImport[0].importDate), 'yyyy-MM-dd'))
+        }
+      })
     : 0;
   
   // Get recent activity (latest time entries)
-  const recentTimeEntries = await db
-    .select({
-      id: timeEntries.id,
-      date: timeEntries.date,
-      employeeId: timeEntries.employeeId,
-      employeeName: employees.name,
-      project: timeEntries.project,
-      description: timeEntries.description,
-    })
-    .from(timeEntries)
-    .innerJoin(employees, eq(timeEntries.employeeId, employees.id))
-    .orderBy(desc(timeEntries.date), desc(timeEntries.id))
-    .limit(5);
+  const recentTimeEntries = await prisma.time_entries.findMany({
+    select: {
+      id: true,
+      date: true,
+      employeeId: true,
+      project: true,
+      description: true,
+      employee: {
+        select: {
+          name: true
+        }
+      }
+    },
+    orderBy: [
+      { date: 'desc' },
+      { id: 'desc' }
+    ],
+    take: 5
+  });
   
-  const recentActivity: RecentActivityData[] = recentTimeEntries.map(entry => ({
+  const recentActivity: RecentActivityData[] = recentTimeEntries.map((entry: any) => ({
     id: entry.id,
     type: 'time_entry',
-    description: `${entry.employeeName} worked on ${entry.project}: ${entry.description}`,
-    date: entry.date,
+    description: `${entry.employee.name} worked on ${entry.project}: ${entry.description || 'No description'}`,
+    date: format(new Date(entry.date), 'yyyy-MM-dd'),
     employeeId: entry.employeeId,
-    employeeName: entry.employeeName,
+    employeeName: entry.employee.name,
   }));
   
   // Add import activity if available
@@ -367,7 +375,7 @@ export async function fetchDashboardData(startDate: string, endDate: string): Pr
   // Calculate capacity utilization rate
   // This represents what percentage of the team's total available hours are being utilized
   // Available hours = active employees * standard work hours per day * workdays in period
-  const workdaysInPeriod = dailyDistribution.filter(day => 
+  const workdaysInPeriod = dailyDistribution.filter((day: any) => 
     day.dayOfWeek !== 0 && day.dayOfWeek !== 6  // 0 = Sunday, 6 = Saturday in PostgreSQL
   ).length;
   
@@ -378,32 +386,74 @@ export async function fetchDashboardData(startDate: string, endDate: string): Pr
     ? (totalHours / totalAvailableHours) * 100 
     : 0;
   
-  return {
+  // Helper function to convert Decimal objects to Numbers
+  const convertDecimalToNumber = (value: any): any => {
+    // Check if value is a Decimal object (has toNumber method)
+    if (value !== null && value !== undefined && typeof value === 'object' && typeof value.toNumber === 'function') {
+      return value.toNumber();
+    }
+    
+    // If it's an array, convert each element
+    if (Array.isArray(value)) {
+      return value.map(item => convertDecimalToNumber(item));
+    }
+    
+    // If it's an object, convert each property
+    if (value !== null && typeof value === 'object') {
+      const result: Record<string, any> = {};
+      for (const key in value) {
+        result[key] = convertDecimalToNumber(value[key]);
+      }
+      return result;
+    }
+    
+    // Otherwise return the value as is
+    return value;
+  };
+
+  // Construct the result with explicit number conversions for all numeric values
+  const result = {
     teamHealth: {
-      totalEmployees,
-      activeEmployees,
-      totalHours,
-      committedHours: totalCommittedHours,
-      efficiencyScore,
-      weekendWorkPercentage,
-      afterHoursPercentage,
-      capacityUtilizationRate,
+      totalEmployees: Number(totalEmployees),
+      activeEmployees: Number(activeEmployees),
+      totalHours: Number(totalHours),
+      committedHours: Number(totalCommittedHours),
+      efficiencyScore: Number(efficiencyScore),
+      weekendWorkPercentage: Number(weekendWorkPercentage),
+      afterHoursPercentage: Number(afterHoursPercentage),
+      capacityUtilizationRate: Number(capacityUtilizationRate),
     },
-    employeeEfficiency: employeeEfficiencyData,
-    projectAllocation: projectAllocationData,
+    employeeEfficiency: employeeEfficiencyData.map(emp => ({
+      ...emp,
+      employeeId: Number(emp.employeeId),
+      totalHours: Number(emp.totalHours),
+      committedHours: Number(emp.committedHours),
+      efficiency: Number(emp.efficiency),
+      daysWorked: Number(emp.daysWorked),
+      consistency: Number(emp.consistency),
+    })),
+    projectAllocation: projectAllocationData.map(proj => ({
+      ...proj,
+      totalHours: Number(proj.totalHours),
+      employeesCount: Number(proj.employeesCount),
+      percentOfTotal: Number(proj.percentOfTotal),
+    })),
     workPatterns: {
-      earlyHours,
-      coreHours,
-      lateHours,
-      nightHours,
-      weekendPercentage: weekendWorkPercentage,
-      afterHoursPercentage,
+      earlyHours: Number(earlyHours),
+      coreHours: Number(coreHours),
+      lateHours: Number(lateHours),
+      nightHours: Number(nightHours),
+      weekendPercentage: Number(weekendWorkPercentage),
+      afterHoursPercentage: Number(afterHoursPercentage),
     },
     recentActivity,
     latestImport: {
       date: latestImportDate,
-      count: latestImportCount,
+      count: Number(latestImportCount),
     },
-    workdaysInPeriod,
+    workdaysInPeriod: Number(workdaysInPeriod),
   };
+
+  // Final safety check to catch any potential Decimal objects
+  return convertDecimalToNumber(result);
 }

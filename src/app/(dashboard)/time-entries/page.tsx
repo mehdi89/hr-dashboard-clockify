@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -243,10 +243,27 @@ function TimeEntriesContent() {
   );
 }
 
+// Loading fallback for Suspense
+function TimeEntriesLoading() {
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title="Time Entries"
+        description="View and manage employee time tracking records"
+      />
+      <div className="flex justify-center py-8">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    </div>
+  );
+}
+
 export default function TimeEntriesPage() {
   return (
     <DateRangeProvider>
-      <TimeEntriesContent />
+      <Suspense fallback={<TimeEntriesLoading />}>
+        <TimeEntriesContent />
+      </Suspense>
     </DateRangeProvider>
   );
 }

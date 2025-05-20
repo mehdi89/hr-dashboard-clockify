@@ -1,8 +1,8 @@
 import { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { db } from "@/db";
-import { employees, EmploymentType } from "@/db/schema";
+import { prisma } from "@/db";
+import { EmploymentType } from "@/generated/prisma";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -26,24 +26,27 @@ async function createEmployee(formData: FormData) {
   const isActive = formData.get("isActive") === "true";
   const clockifyName = formData.get("clockifyName") as string;
   
-  // Insert the new employee
-  const result = await db.insert(employees)
-    .values({
+  // Insert the new employee using Prisma
+  const result = await prisma.employees.create({
+    data: {
       name,
       email,
       phone,
       department,
       employmentType,
-      weeklyCommittedHours,
-      startDate,
+      weeklyCommittedHours: weeklyCommittedHours,
+      startDate: new Date(startDate),
       isActive,
       clockifyName
-    })
-    .returning({ id: employees.id });
+    },
+    select: {
+      id: true
+    }
+  });
   
   // Redirect to the employee's page
-  if (result && result.length > 0) {
-    redirect(`/employees/${result[0].id}`);
+  if (result) {
+    redirect(`/employees/${result.id}`);
   } else {
     // If insertion failed, redirect to employees list
     redirect('/employees');
@@ -164,15 +167,15 @@ export default async function NewEmployeePage() {
               
               <div className="space-y-2">
                 <div className="text-sm font-medium">Employment Type</div>
-                <Select name="employmentType" defaultValue={EmploymentType.FULL_TIME}>
+                <Select name="employmentType" defaultValue={EmploymentType.full_time}>
                   <SelectTrigger id="employmentType">
                     <SelectValue placeholder="Select type" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={EmploymentType.FULL_TIME}>Full Time</SelectItem>
-                    <SelectItem value={EmploymentType.PART_TIME}>Part Time</SelectItem>
-                    <SelectItem value={EmploymentType.CONTRACT}>Contract</SelectItem>
-                    <SelectItem value={EmploymentType.FREELANCE}>Freelance</SelectItem>
+                    <SelectItem value={EmploymentType.full_time}>Full Time</SelectItem>
+                    <SelectItem value={EmploymentType.part_time}>Part Time</SelectItem>
+                    <SelectItem value={EmploymentType.contract}>Contract</SelectItem>
+                    <SelectItem value={EmploymentType.freelance}>Freelance</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
